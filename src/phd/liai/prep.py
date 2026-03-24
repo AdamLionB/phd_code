@@ -5,9 +5,18 @@ import pandas as pd
 import numpy as np
 from .. import cupt_parser
 import pandas as pd
+import time
+from rich.console import Console
+import marimo as mo
+
+console = Console()
 
 
+def step(msg: str):
+	with mo.status.spinner(msg):
+		pass
 
+#%%
 def df_to_tensor(df, sentence_len = 115, pad_idx = 0):
 
 	
@@ -33,34 +42,52 @@ def df_to_tensor(df, sentence_len = 115, pad_idx = 0):
 
 
 def file2ts(file, voc, max_len = 0, split= 1):
-	DATA = cupt_parser.setup_data_noTT(
-		file
-	)
-	if max_len > 0:
-		pass #TODO
-	else:
-		max_len = DATA['id'].groupby(level=0).count().max()
-	mwes = cupt_parser.inline_mwes(cupt_parser.get_mwes(DATA))
+	with mo.status.spinner('Loading df'):
+		t = time.perf_counter()
+		DATA = cupt_parser.setup_data_noTT(
+			file
+		)
+		# print(f"Data loaded in {time.perf_counter() - t} seconds")
 	
-	mask = torch.nn.utils.rnn.pad_sequence(
-		DATA.groupby(level=0).apply(lambda x: torch.tensor(x['id'].tolist()) * 0 +1).tolist()
-		, batch_first=True
-		,padding_value=0
-	)
+	with mo.status.spinner('Calculating max sentence length'):
+		t = time.perf_counter()
+		if max_len > 0:
+			pass #TODO
+		else:
+			max_len = DATA['id'].groupby(level=0).count().max()
+		# print(f"Max sentence length calculated in {time.perf_counter() - t} seconds")
+
+	with mo.status.spinner('Extracting MWEs'):
+		t = time.perf_counter()
+		mwes = cupt_parser.inline_mwes(cupt_parser.get_mwes(DATA))
+		# print(f"MWE extracted in {time.perf_counter() - t} seconds")
+
+	with mo.status.spinner('Creating mask'):
+		t = time.perf_counter()
+		mask = torch.nn.utils.rnn.pad_sequence(
+			DATA.groupby(level=0).apply(lambda x: torch.tensor(x['id'].tolist()) * 0 +1).tolist()
+			, batch_first=True
+			,padding_value=0
+		)
+		# print(f"Mask created in {time.perf_counter() - t} seconds")
+
 	indices = list(set(DATA.reset_index()['sentence_id']))
 	indices_map = {x : n for n, x in enumerate(indices)}
 
-	labels = pd.concat([
-		mwes[1].apply(
-				lambda x: torch.scatter(
-					torch.zeros(max_len),
-					0,
-					torch.tensor(tuple(x)) - 1, torch.ones(max_len)
-				).int().tolist()
-			),
-		DATA.groupby(level=0).apply(lambda x: torch.zeros(max_len).int().tolist()).rename(2)
-	])
-	labels = labels.rename(index=indices_map)
+	with mo.status.spinner('Creating labels'):
+		t = time.perf_counter()
+		labels = pd.concat([
+			mwes[1].apply(
+					lambda x: torch.scatter(
+						torch.zeros(max_len),
+						0,
+						torch.tensor(tuple(x)) - 1, torch.ones(max_len)
+					).int().tolist()
+				),
+			DATA.groupby(level=0).apply(lambda x: torch.zeros(max_len).int().tolist()).rename(2)
+		])
+		labels = labels.rename(index=indices_map)
+		# print(f"Labels created in {time.perf_counter() - t} seconds")
 
 	nb_sentences = len(indices_map)
 	rng = np.random.default_rng()
@@ -80,8 +107,11 @@ def file2ts(file, voc, max_len = 0, split= 1):
 
 	data = df_to_tensor(df, max_len+1)
 
-	sentences = DATA['form'].groupby(level=0).apply(lambda x: list(x))
-	sentences = sentences.rename(index=indices_map)
+	with mo.status.spinner('Creating sentences'):
+		t = time.perf_counter()
+		sentences = DATA['form'].groupby(level=0).apply(lambda x: list(x))
+		sentences = sentences.rename(index=indices_map)
+		# print(f"Sentences created in {time.perf_counter() - t} seconds")
 	# data = prep_df_for_tensor(df)
 
 	X_train = data[train_ids]
@@ -118,3 +148,4 @@ class Voc:
 		if not (k in self.dic):
 			self.dic[k] = len(self.dic)
 		return self.dic[k]
+# %%

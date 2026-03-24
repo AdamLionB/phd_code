@@ -22,7 +22,7 @@ class Simple_Wrapper(nn.Module):
 		pass
 
 
-class Bert2(nn.Module):
+class Bert_first_word(nn.Module):
 	def __init__(self, device, shorten=True) -> None:
 		super().__init__()
 		self.tokenizer = BertTokenizer.from_pretrained('bert-base-multilingual-cased')
@@ -69,7 +69,7 @@ class Bert2(nn.Module):
 
 
 
-class Bert(nn.Module):
+class Bert_avg_word(nn.Module):
 	def __init__(self, device, shorten=True) -> None:
 		super().__init__()
 		self.tokenizer = BertTokenizer.from_pretrained('bert-base-multilingual-cased')
@@ -153,7 +153,7 @@ class MWE_Identifier(nn.Module):
 				], sum)
 			if n == 'bert':
 				return AGG([
-					[Bert(device), ['sentence']],
+					[Bert_avg_word(device), ['sentence']],
 				], sum)
 			if n == 'lem+penc':
 				return AGG([
@@ -162,33 +162,33 @@ class MWE_Identifier(nn.Module):
 				], sum)
 			if n == 'bert+denc':
 				return AGG([
-					[Bert(device), ['sentence']],
+					[Bert_avg_word(device), ['sentence']],
 					[Simple_Wrapper(pos_encoding(768, device)), ['deps']]
 				], sum)
 			if n == 'bert+demb':
 				return AGG([
-					[Bert(device), ['sentence']],
+					[Bert_avg_word(device), ['sentence']],
 					[Simple_Wrapper(nn.Embedding(300, 768, device=device)), ['deps']]
 				], sum)
 			if n == 'bert+penc':
 				return AGG([
-					[Bert(device), ['sentence']],
+					[Bert_avg_word(device), ['sentence']],
 					[Simple_Wrapper(pos_encoding(768, device)), ['pos']]
 				], sum)
 			if n == 'bert+pemb':
 				return AGG([
-					[Bert(device), ['sentence']],
+					[Bert_avg_word(device), ['sentence']],
 					[Simple_Wrapper(nn.Embedding(300, 768, device=device)), ['pos']]
 				], sum)
 			if n == 'bert+penc+denc': #sum deps enc
 				return AGG([
-					[Bert(device), ['sentence']],
+					[Bert_avg_word(device), ['sentence']],
 					[Simple_Wrapper(pos_encoding(768, device)), ['pos']],
 					[Simple_Wrapper(pos_encoding(768, device)), ['deps']]
 				], sum)
 			if n == 'bert+penc+denc_alt': # sum deps enc but weird
 				return AGG([
-					[Bert(device), ['sentence']],
+					[Bert_avg_word(device), ['sentence']],
 					[AGG([
 						[Simple_Wrapper(pos_encoding(768, device)), ['pos']],
 						[Simple_Wrapper(pos_encoding(768, device)), ['deps']]
@@ -196,13 +196,13 @@ class MWE_Identifier(nn.Module):
 				]], sum)
 			if n == 'bert+penc+demb': # sum deps emb
 				return AGG([
-					[Bert(device), ['sentence']],
+					[Bert_avg_word(device), ['sentence']],
 					[Simple_Wrapper(pos_encoding(768, device)), ['pos']],
 					[Simple_Wrapper(nn.Embedding(300, 768, device=device)), ['deps']]
 				], sum)
 			if n == 'bert+{penc_denc}': #cat deps pos enc
 				return AGG([
-					[Bert(device), ['sentence']],
+					[Bert_avg_word(device), ['sentence']],
 					[AGG([
 						[Simple_Wrapper(pos_encoding(384, device)), ['pos']],
 						[Simple_Wrapper(pos_encoding(384, device)), ['deps']]

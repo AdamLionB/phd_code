@@ -156,14 +156,21 @@ class Cupt_parser:
 		return next(self.get_df_per_batch(0))
 
 	def get_df_no_tt_per_batch(self, batch_size):
-		df =  DataFrame.from_dict(
-			{
-				(self._counter + m, token['id']): {**token}
-				for m, tl in enumerate(self.read_next_n(batch_size))
-				for token in tl
-			},
-				orient='index'
-		)
+		lines = [
+			((self._counter + m, token['id']), {**token})
+			for m, tl in enumerate(self.read_next_n(batch_size))
+			for token in tl
+		]
+		index, rows = zip(*lines) if lines else ([], [])
+		df = DataFrame(list(rows), index=index)
+		# df =  DataFrame.from_dict(
+		# 	{
+		# 		(self._counter + m, token['id']): {**token}
+		# 		for m, tl in enumerate(self.read_next_n(batch_size))
+		# 		for token in tl
+		# 	},
+		# 		orient='index'
+		# )
 		df.index = df.index.rename(['sentence_id', 'token_id'])
 		for f in self._postprocessing:
 			df = f(df)

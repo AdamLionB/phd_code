@@ -8,7 +8,9 @@ from .. import utils
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from . import model_copy
+
+from . import model as liai_model
+
 from . import prep
 
 # from . import utils
@@ -115,7 +117,7 @@ class Merger4(nn.Module):
 	def __init__(self, nb_annotateurs, frozen, device) -> None:
 		super(Merger4, self).__init__()
 		self.device = device
-		self.bert = model_copy.Bert(device, shorten=True)
+		self.bert = liai_model.Bert_avg_word(device, shorten=True)
 		self.classifier = nn.Sequential(
 			nn.Linear(768, 100),
 			nn.Tanh(),
@@ -152,7 +154,7 @@ class Merger3(nn.Module):
 	def __init__(self, nb_annotateurs, frozen, device) -> None:
 		super(Merger3, self).__init__()
 		self.device = device
-		# self.bert = model_copy.Bert(device, shorten=True)
+		# self.bert = liai_model.Bert(device, shorten=True)
 		# self.classifier = nn.Sequential(
 		# 	nn.Linear(768 + nb_annotateurs, 100),
 		# 	nn.Tanh(),
@@ -197,7 +199,7 @@ class Merger2(nn.Module):
 	def __init__(self, nb_annotateurs, frozen, device) -> None:
 		super(Merger2, self).__init__()
 		self.device = device
-		self.bert = model_copy.Bert(device, shorten=True)
+		self.bert = liai_model.Bert_avg_word(device, shorten=True)
 		self.classifier = nn.Sequential(
 			nn.Linear(768 + nb_annotateurs, 100),
 			nn.Tanh(),
@@ -239,7 +241,7 @@ class Merger_emb(nn.Module):
 	def __init__(self, voc, nb_annotateurs, frozen, device) -> None:
 		super(Merger_emb, self).__init__()
 		self.device = device
-		# self.bert = model_copy.Bert(device, shorten=True)
+		# self.bert = liai_model.Bert(device, shorten=True)
 		self.voc = voc
 		# print(len(voc.dic))
 		self.emb = nn.Embedding(len(voc.dic)+100, 100)
@@ -278,7 +280,7 @@ class Merger_mtlb(nn.Module):
 	def __init__(self, nb_annotateurs, frozen, device) -> None:
 		super(Merger_mtlb, self).__init__()
 		self.device = device
-		self.bert = model_copy.Bert(device, shorten=True)
+		self.bert = liai_model.Bert_avg_word(device, shorten=True)
 		self.classifier = nn.Sequential(
 			# nn.TransformerEncoder(nn.TransformerEncoderLayer(768 + nb_annotateurs, 4), 2),
 			# nn.Tanh(),
@@ -306,11 +308,11 @@ class Merger_mtlb(nn.Module):
 		out = (out* mask).mean(dim=-1)
 		return out
 
-class Merger_bert2(nn.Module):
+class Merger_with_padding_mask(nn.Module):
 	def __init__(self, nb_annotateurs, frozen, device) -> None:
-		super(Merger_bert2, self).__init__()
+		super(Merger_with_padding_mask, self).__init__()
 		self.device = device
-		self.bert = model_copy.Bert2(device, shorten=True)
+		self.bert = liai_model.Bert_first_word(device, shorten=True)
 		self.classifier = nn.Sequential(
 			# nn.TransformerEncoder(nn.TransformerEncoderLayer(768 + nb_annotateurs, 4), 2),
 			# nn.Tanh(),
@@ -337,11 +339,11 @@ class Merger_bert2(nn.Module):
 		out = (out* mask).mean(dim=-1)
 		return out
 
-class Merger(nn.Module):
+class Merger_without_padding_mask(nn.Module):
 	def __init__(self, nb_annotateurs, frozen, device) -> None:
-		super(Merger, self).__init__()
+		super(Merger_without_padding_mask, self).__init__()
 		self.device = device
-		self.bert = model_copy.Bert(device, shorten=True)
+		self.bert = liai_model.Bert_avg_word(device, shorten=True)
 		self.classifier = nn.Sequential(
 			# nn.TransformerEncoder(nn.TransformerEncoderLayer(768 + nb_annotateurs, 4), 2),
 			# nn.Tanh(),
@@ -627,7 +629,7 @@ if __name__=="__main__":
 	# print(len(voc.dic))
 	# model = Merger_emb(voc, 4, frozen, device).to(device)
 
-	model = Merger_bert2(4, frozen, device).to(device)
+	model = Merger_with_padding_mask(4, frozen, device).to(device)
 	# model = Merger_mtlb(1, frozen, device).to(device)
 	if load:
 		try:

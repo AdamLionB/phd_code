@@ -1,2 +1,3 @@
 # import prep
-from .liai import *
+from .core import *
+from . import model
