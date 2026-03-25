@@ -15,7 +15,7 @@ import rich.console
 
 
 LANG = 'FR'
-DEVorTEST = 'dev'
+DEVorTEST = 'test'
 frozen = False
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -28,11 +28,13 @@ console = rich.console.Console()
 # %%
 voc = liai.prep.Voc()
 with console.status('loading data') as spinner:
-	spinner.update(f'loading {parseme_path}/1.2/{LANG}/{DEVorTEST}.system.cupt')
+	spinner.update(f'loading {parseme_path}/1.2/{LANG}/{DEVorTEST}.mtlb_trained_on_train.cupt')
 # print(f'loading {parseme_path}/1.2/{LANG}/{DEVorTEST}.system.cupt')
-	test_sentences, Y_system_test = (tmp_tuple:=liai.prep.file2ts(f'{parseme_path}/1.2/{LANG}/{DEVorTEST}.system.cupt', voc, 0, 1))[0], tmp_tuple[5]
-	spinner.update(f'loading {parseme_path}/1.2/{LANG}/{DEVorTEST}.blind.cupt.lex')
-	Y_lex_test= liai.prep.file2ts(f'{parseme_path}/1.2/{LANG}/{DEVorTEST}.blind.cupt.lex', voc, 0, 1)[5]
+	test_sentences, Y_system_test = (tmp_tuple:=liai.prep.file2ts(f'{parseme_path}/1.2/{LANG}/{DEVorTEST}.mtlb_trained_on_train.cupt', voc, 0, 1))[0], tmp_tuple[5]
+
+	spinner.update(f'loading {parseme_path}/1.2/{LANG}/{DEVorTEST}.lex_lem_dep_css.cupt')
+	Y_lex_test= liai.prep.file2ts(f'{parseme_path}/1.2/{LANG}/{DEVorTEST}.lex_lem_dep_css.cupt', voc, 0, 1)[5]
+
 	spinner.update(f'loading {parseme_path}/1.2/{LANG}/{DEVorTEST}.cupt')
 	Y_truth_test = liai.prep.file2ts(f'{parseme_path}/1.2/{LANG}/{DEVorTEST}.cupt', voc, 0, 1)[5]
 
@@ -58,6 +60,6 @@ df_test = cupt_parser.setup_data_noTT(f'{parseme_path}/1.2/{LANG}/{DEVorTEST}.cu
 truth_test, data_test = liai.build_candidate_table_and_labels(Y_system_test, Y_lex_test, Y_truth_test)
 # spinner.update('evaluating model')
 #%% 
-liai.eval_model(model, test_sentences, data_test, truth_test, df_test, device,10)
+liai.eval_model(model, test_sentences, data_test, truth_test, df_test, device,1)
 
 # %%

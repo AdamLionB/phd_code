@@ -444,7 +444,6 @@ def expS(p):
 		)[0][0])
 
 def eval_model(model, sentences_test, data_test=None, truth_test=None, df_test=None, device='cpu', batch_size=bs):
-	print('aaa')
 	# spinner_manager = mo.status.spinner(title="Loading ...")
 	# spinner = spinner_manager.__enter__()
 	model.eval()
@@ -465,9 +464,9 @@ def eval_model(model, sentences_test, data_test=None, truth_test=None, df_test=N
 		# print(truth_test)
 		# print(sentences_test)
 		tp =0
-		x = 0
+		predicted = 0
 		y = 0
-		z = 0
+		to_predict = 0
 		rloss = 0
 		# batch_size = 100
 		progress = Progress(
@@ -543,8 +542,8 @@ def eval_model(model, sentences_test, data_test=None, truth_test=None, df_test=N
 				# print(len(mwe_type_counter))
 				# print(mwe_type_counter)
 				tp += torch.sum((r_test > 0).int() & batch_truth_test)
-				x += torch.sum((r_test > 0).int())
-				z += torch.sum(batch_truth_test)
+				predicted += torch.sum((r_test > 0).int())
+				to_predict += torch.sum(batch_truth_test)
 				progress.advance(loop_task)
 				# y += sum(batch_truth_test.int())
 
@@ -554,12 +553,13 @@ def eval_model(model, sentences_test, data_test=None, truth_test=None, df_test=N
 			# y = len(truth_test.loc[lambda x: x])
 			# print(c)
 			# spinner_manager.__exit__(None, None, None)
-		if not flag:
-			y = len(Y_truth[lambda x: x.apply(lambda x: 1 in x)]) // 4
-		else:
-			y = len(Y_truth_test[lambda x: x.apply(lambda x: 1 in x)])
-		p = (tp / x).item() if x.item != 0 else 0
-		r = (tp / y).item()
+		# if not flag:
+		# 	y = len(Y_truth[lambda x: x.apply(lambda x: 1 in x)]) // 4
+		# else:
+		# 	y = len(Y_truth_test[lambda x: x.apply(lambda x: 1 in x)])
+		# y = int(pd.Series(truth_test).astype(bool).sum())
+		p = (tp / predicted).item() if predicted.item != 0 else 0
+		r = (tp / to_predict).item()
 		
 		if wnb:
 			wandb.log({
@@ -568,10 +568,10 @@ def eval_model(model, sentences_test, data_test=None, truth_test=None, df_test=N
 				'r_t': r,
 				'f_t': (2 * p * r) / (p + r) if r+p != 0 else 0,
 				'tp_t': tp,
-				'predicted_t': x,
-				'to_predct_t': y,
-				'max_r_t': z / y,
-				'max_f_t': (2 * (z / y)) / ((z / y) + 1)
+				'predicted_t': predicted,
+				'to_predict_t': to_predict,
+				'max_r_if_correct_pred': to_predict / to_predict,
+				'max_f_if_correct_pred': (2 * (to_predict / to_predict)) / ((to_predict / to_predict) + 1)
 			})
 		# if save and ((2 * p * r) / (p + r) if r+p != 0 else 0) > 0.6742:
 		# 	torch.save(model.state_dict(), str(epoch)+'_'+save)
@@ -579,8 +579,22 @@ def eval_model(model, sentences_test, data_test=None, truth_test=None, df_test=N
 			max_f = ((2 * p * r) / (p + r) if r+p != 0 else 0)
 			torch.save(model.state_dict(), str(epoch)+'_'+save)
 
-
+	
 	print(p * 100, r * 100, ((2 * p * r) / (p + r)) * 100 if r+p != 0 else 0, E_1mD(pd.Series(mwe_type_counter)), len(mwe_type_counter), expS(pd.Series(mwe_type_counter)))#, x.item(), y, tp.item(), z.item())
+	return {
+		'loss': rloss,
+		'precision': p,
+		'recall': r,
+		'f1': (2 * p * r) / (p + r) if r+p != 0 else 0,
+		'true positive': tp,
+		'predicted': predicted,
+		'to_predict': to_predict,
+		'max_r_if_correct_pred': to_predict / to_predict,
+		'max_f_if_correct_pred': (2 * (to_predict / to_predict)) / ((to_predict / to_predict) + 1),
+		'richness': len(mwe_type_counter),
+		'E_1mD': E_1mD(pd.Series(mwe_type_counter)),
+		'expS': expS(pd.Series(mwe_type_counter))
+	}
 # import .prep
 
 def merger_preprocessing(sentences, data, model, device):
