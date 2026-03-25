@@ -1,6 +1,7 @@
 #%%
 import torch
 import torch.nn as nn
+import psutil, os
 import torch.optim as optim
 from transformers import BertTokenizer, BertModel
 from .. import cupt_parser
@@ -8,6 +9,10 @@ from .. import utils
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+# import marimo as mo
+from rich.live import Live
+from rich.console import Group
+from rich.progress import Progress, BarColumn, MofNCompleteColumn, TaskProgressColumn, TextColumn, TimeElapsedColumn, SpinnerColumn
 
 from . import model as liai_model
 
@@ -310,7 +315,8 @@ class Merger_mtlb(nn.Module):
 
 class Merger_with_padding_mask(nn.Module):
 	def __init__(self, nb_annotateurs, frozen, device) -> None:
-		super(Merger_with_padding_mask, self).__init__()
+		# super(Merger_with_padding_mask, self).__init__()
+		super().__init__()
 		self.device = device
 		self.bert = liai_model.Bert_first_word(device, shorten=True)
 		self.classifier = nn.Sequential(
@@ -363,9 +369,9 @@ class Merger_without_padding_mask(nn.Module):
 		)
 		out = out.squeeze().mean(dim=-1)
 		return out
-	
-def f(a, b, truth):
-	tmp = pd.merge(
+
+def merger_candidates(a, b):
+	return pd.merge(
 		a.loc[a.apply(lambda x: 1 in x)].apply(tuple).to_frame().reset_index(),
 		b.loc[b.apply(lambda x: 1 in x)].apply(tuple).to_frame().reset_index(),
 		how='outer',
@@ -374,9 +380,14 @@ def f(a, b, truth):
 		right_on=[0, 'sentence_id'],
 		sort=True
 	)
+
+
+def build_candidate_table_and_labels(a, b, truth):
+	candidates = merger_candidates(a, b)
+
 	return (
 		pd.merge(
-			tmp,
+			candidates,
 			truth[truth.apply(lambda x: 1 in x)].apply(tuple).to_frame().reset_index(),
 			how='outer',
 			indicator='truth',
@@ -384,7 +395,7 @@ def f(a, b, truth):
 			right_on=[0, 'sentence_id'],
 			sort=True
 		).dropna()['truth'].apply(lambda x: (x == 'both') | (x == 'right_only')),
-		tmp.transform(
+		candidates.transform(
 			lambda x: [
 				x['sentence_id'],
 				x[0] if x['_merge'] == 'left_only' or x['_merge'] == 'both' else None,
@@ -432,16 +443,24 @@ def expS(p):
 			p.sort_values(ascending=False)
 		)[0][0])
 
-def eval_model(model, sentences_test, data_test=None, truth_test=None, Y_system_test=None, Y_lex_test=None, Y_truth_test=None, df_test=None, device='cpu'):
+def eval_model(model, sentences_test, data_test=None, truth_test=None, df_test=None, device='cpu', batch_size=bs):
+	print('aaa')
+	# spinner_manager = mo.status.spinner(title="Loading ...")
+	# spinner = spinner_manager.__enter__()
 	model.eval()
-	c = Counter()
+	mwe_type_counter = Counter()
 	with torch.inference_mode():
 		flag = False
 		if data_test is None:
-			truth_test, data_test = f(Y_system_test, Y_lex_test, Y_truth_test)
+			truth_test, data_test = build_candidate_table_and_labels(Y_system_test, Y_lex_test, Y_truth_test)
 			flag = True
+		
+		# spinner_manager.__exit__(None, None, None)
 		score= 0
-		tmp = np.arange(len(data_test))
+		_model_mb = sum(p.numel() * p.element_size() for p in model.parameters()) / 1024**2
+		_bert_cfg = model.bert.embedding.config
+		_dtype_bytes = next(model.parameters()).element_size()
+		all_ids = np.arange(len(data_test))
 		# print(data_test.head(20))
 		# print(truth_test)
 		# print(sentences_test)
@@ -451,46 +470,90 @@ def eval_model(model, sentences_test, data_test=None, truth_test=None, Y_system_
 		z = 0
 		rloss = 0
 		# batch_size = 100
-		for i in tqdm(range(len(tmp)//bs+1)):
-			batch_ids = tmp[i*bs:i*bs+bs]
-			# print(batch_ids)
-			if len(batch_ids) == 0:
-				# print('*')
-				continue
-			# print(len(sentences_test), batch_ids)
+		progress = Progress(
+			TextColumn("[progress.description]{task.description}"),
+			BarColumn(),
+			MofNCompleteColumn(),
+			TaskProgressColumn(),
+		)
+		loop_task = progress.add_task("Loop", total=len(all_ids)//batch_size+1)
+		step_progress = Progress(
+			SpinnerColumn(),
+			TextColumn("{task.description}"),
+			TimeElapsedColumn(),
+		)
+		step_task = step_progress.add_task("Working on current item...")
+		with Live(Group(progress, step_progress), refresh_per_second=10) as live:
+			for i in range(len(all_ids)//batch_size+1):
+				# spinner_manager = mo.status.spinner(title="batch setup")
+				# spinner = spinner_manager.__enter__()
+				step_progress.reset(step_task, description='batch setup')
+				batch_ids = all_ids[i*batch_size:i*batch_size+batch_size]
+				# live.console.print(batch_ids)
+				if len(batch_ids) == 0:
+					live.console.print('*')
+					continue
+				# live.console.print(len(sentences_test), batch_ids)
+				step_progress.reset(step_task, description='batch_test')
+				batch_test = data_test.iloc[batch_ids]
+				# live.console.print(batch_test)
+				step_progress.reset(step_task, description='batch_sentences')
+				batch_sentences = sentences_test.loc[batch_test['sentence_id']]
+				# live.console.print(batch_sentences)
+				step_progress.reset(step_task, description='batch_truth_test')
+				batch_truth_test = torch.tensor(truth_test.iloc[batch_ids].values.astype(int)).to(device)
+				# print(len(all_ids[i*batch_size:i*batch_size+batch_size]), len(batch_truth_test), len(batch_sentences))
+				# print(batch_sentences)
+				# live.console.print(batch_truth_test)
 
-			batch_test = data_test.iloc[batch_ids]
-			# print(batch_test)
-			batch_sentences = sentences_test.loc[batch_test['sentence_id']]
-			batch_truth_test = torch.tensor(truth_test.iloc[batch_ids].values.astype(int)).to(device)
-			# print(len(tmp[i*bs:i*bs+bs]), len(batch_truth_test), len(batch_sentences))
-			# print(batch_sentences)
-			# print(batch_truth_test)
+				step_progress.reset(step_task, description='merger preprocessing ...')
+				merger_input = merger_preprocessing(batch_sentences, batch_test, model, device)
 
-			r_test = merger_preprocessing(batch_sentences, batch_test, model, device)
+				sizes = [len(s) for s in batch_sentences.tolist()]
+				_act_mb = (
+					2 * _bert_cfg.num_hidden_layers
+					* len(sizes) * max(sizes)
+					* _bert_cfg.hidden_size
+					* _dtype_bytes
+				) / 1024**2
+				step_progress.reset(step_task, description=f'merger inference (sentences: {len(sizes)}, lengths: {min(sizes)}/{sum(sizes)//len(sizes)}/{max(sizes)}) | RAM: {_model_mb:.1f} MB + {_act_mb:.1f} MB = {_model_mb+_act_mb:.1f} MB')
+				r_test = model(*merger_input)
+				step_progress.update(step_task, description=f'merger inference done | weights: {_model_mb:.1f} MB  ~activations: {_act_mb:.1f} MB  ~total: {_model_mb+_act_mb:.1f} MB')
 
-			loss = bce(r_test, batch_truth_test.float())	
-			rloss += loss.item()
-			if df_test is not None:
-				c.update([utils.fmset(
-						df_test.loc[[
+				# live.console.print(r_test)
+				step_progress.reset(step_task, description='loss setup ...')
+
+				loss = bce(r_test, batch_truth_test.float())	
+				rloss += loss.item()
+				step_progress.reset(step_task, description='type counting ...')
+				if df_test is not None:
+					mwe_type_counter.update([
+						utils.fmset(
+							df_test.loc[[
 								(v['sentence_id'], n) 
 								for n, (x,y) in enumerate(zip(v[0], v['_merge']), 1) 
-								if 1 - ((1 - x) * (1 - y)) == 1]]['lemma'].tolist()) 
-							for (_, v), r, t in zip(batch_test.iterrows(), r_test, batch_truth_test) 
-							if r > 0 and t])
-			# print(len(c))
-			# print(c)
-			tp += torch.sum((r_test > 0).int() & batch_truth_test)
-			x += torch.sum((r_test > 0).int())
-			z += torch.sum(batch_truth_test)
-			# y += sum(batch_truth_test.int())
+								if 1 - ((1 - x) * (1 - y)) == 1
+							]]['lemma'].tolist()
+						) 
+						for (_, v), r, t in zip(batch_test.iterrows(), r_test, batch_truth_test) 
+						if r > 0 and t
+					])
+					
+				step_progress.reset(step_task, description='eval')
+				# print(len(mwe_type_counter))
+				# print(mwe_type_counter)
+				tp += torch.sum((r_test > 0).int() & batch_truth_test)
+				x += torch.sum((r_test > 0).int())
+				z += torch.sum(batch_truth_test)
+				progress.advance(loop_task)
+				# y += sum(batch_truth_test.int())
 
-			# annotated = data_test.iloc[batch_ids].loc[[x for x, y in zip(data_test.iloc[batch_ids].index, r_test.cpu() > 0) if y]]
-			# print(tp.item(), x.item(), z.item())
-		# print()
-		# y = len(truth_test.loc[lambda x: x])
-		# print(c)
+				# annotated = data_test.iloc[batch_ids].loc[[x for x, y in zip(data_test.iloc[batch_ids].index, r_test.cpu() > 0) if y]]
+				# print(tp.item(), x.item(), z.item())
+			# print()
+			# y = len(truth_test.loc[lambda x: x])
+			# print(c)
+			# spinner_manager.__exit__(None, None, None)
 		if not flag:
 			y = len(Y_truth[lambda x: x.apply(lambda x: 1 in x)]) // 4
 		else:
@@ -517,7 +580,7 @@ def eval_model(model, sentences_test, data_test=None, truth_test=None, Y_system_
 			torch.save(model.state_dict(), str(epoch)+'_'+save)
 
 
-	print(p * 100, r * 100, ((2 * p * r) / (p + r)) * 100 if r+p != 0 else 0, E_1mD(pd.Series(c)), len(c), expS(pd.Series(c)))#, x.item(), y, tp.item(), z.item())
+	print(p * 100, r * 100, ((2 * p * r) / (p + r)) * 100 if r+p != 0 else 0, E_1mD(pd.Series(mwe_type_counter)), len(mwe_type_counter), expS(pd.Series(mwe_type_counter)))#, x.item(), y, tp.item(), z.item())
 # import .prep
 
 def merger_preprocessing(sentences, data, model, device):
@@ -526,6 +589,7 @@ def merger_preprocessing(sentences, data, model, device):
 			data[[0, '_merge']].apply(lambda col: col.map(list)).values.tolist(), device=device
 		).transpose(-1, -2), split_size_or_sections=1, dim=-1
 	)
+	return sentences, a, b, (a & b).float(), (a | b).float()
 	# print(a.shape, b.shape, len(sentences))
 	return  model(
 		sentences,
@@ -692,7 +756,7 @@ if __name__=="__main__":
 		# sentences,_,_,_,_,Y_system,_,_,_,_,_ = prep.file2ts(LANG+'/dev.system.cupt', voc, 0, 1)
 		# _,_,_,_,_,Y_lex,_,_,_,_,_ = prep.file2ts(LANG+'/dev.blind.cupt.lex', voc, 0, 1)
 		# _,_,_,_,_,Y_truth,_,_,_,_,_ = prep.file2ts(LANG+'/dev.cupt', voc, 0, 1)
-		truth, data = f(Y_system, Y_lex, Y_truth)
+		truth, data = build_candidate_table_and_labels(Y_system, Y_lex, Y_truth)
 		# test_truth, test_data = f(Y_system_test, Y_lex_test, Y_truth_test)
 
 		train_data = data
@@ -722,9 +786,10 @@ if __name__=="__main__":
 				optimizer.zero_grad()
 
 
-				r = merger_preprocessing(
+				merger_input = merger_preprocessing(
 					batch_sentence, batch, model, device
 				)
+				r = model(*merger_input)
 				# a, b = torch.split(
 				# 	torch.tensor(
 				# 		batch[[0, '_merge']].applymap(list).values.tolist(), device=device
