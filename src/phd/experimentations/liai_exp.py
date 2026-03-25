@@ -60,6 +60,6 @@ df_test = cupt_parser.setup_data_noTT(f'{parseme_path}/1.2/{LANG}/{DEVorTEST}.cu
 truth_test, data_test = liai.build_candidate_table_and_labels(Y_system_test, Y_lex_test, Y_truth_test)
 # spinner.update('evaluating model')
 #%% 
-liai.eval_model(model, test_sentences, data_test, truth_test, df_test, device,1)
+liai.eval_model(model, test_sentences, Y_truth_test, data_test, truth_test, df_test, device,100)
 
 # %%
