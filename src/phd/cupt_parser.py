@@ -97,7 +97,11 @@ class Cupt_parser:
 			if src's type is incorrect
 		'''
 		if type(src) == str:
-			file = open(src, 'r', encoding="utf-8")
+			from . import dcupt
+			if dcupt.is_dcupt(src):
+				file = dcupt.resolve_as_stream(src)
+			else:
+				file = open(src, 'r', encoding="utf-8")
 			self.parser_TL = parse_incr(file)
 		elif type(src) == list:
 			self.parser_TL = src
@@ -264,7 +268,7 @@ def setup_data_noTT(
 
 def remove_NE(x):
 	def f(i, x):
-		return ';'.join([y for y in x.split(';') if re.search(f'^{i}(;|:|$)', y) == None]) or '*'
+		return ';'.join([y for y in x.split(';') if re.search(rf'^{i}(;|:|$)', y) == None]) or '*'
 	def h(x):
 		
 		return [
@@ -275,11 +279,11 @@ def remove_NE(x):
 					lambda i : (
 						i,
 						x.filter(**{
-							'parseme:mwe': lambda x: re.search(f'(;|^){i}(;|:|$)', x) != None
+							'parseme:mwe': lambda x: re.search(rf'(;|^){i}(;|:|$)', x) != None
 						}),
 						x.filter(**{
 							'parseme:mwe':
-							lambda x: re.search(f'(?:;|^){i}:\w+?\|(NE).+?\|.+', x) != None
+							lambda x: re.search(rf'(?:;|^){i}:\w+?\|(NE).+?\|.+', x) != None
 						})
 					),
 					count(1) 
@@ -296,7 +300,7 @@ def remove_NE(x):
 
 def remove_NE(x):
 	def f(i, x):
-		return ';'.join([y for y in x.split(';') if re.search(f'^{i}(;|:|$)', y) == None]) or '*'
+		return ';'.join([y for y in x.split(';') if re.search(rf'^{i}(;|:|$)', y) == None]) or '*'
 	def h(tl):
 		
 		return [
@@ -304,11 +308,11 @@ def remove_NE(x):
 			for i in {
 				y 
 				for x in tl
-				for y in re.findall(f'(\d+)', x['parseme:mwe'])
+				for y in re.findall(r'(\d+)', x['parseme:mwe'])
 			}
 			if tl.filter(**{
 				'parseme:mwe':
-				lambda x: re.search(f'(?:;|^){i}:\w+?\|(NE).+?\|.+', x) != None
+				lambda x: re.search(rf'(?:;|^){i}:\w+?\|(NE).+?\|.+', x) != None
 			})
 		]
 
@@ -320,7 +324,7 @@ def remove_NE(x):
 
 def remove_VMWE(x):
 	def f(i, x):
-		return ';'.join([y for y in x.split(';') if re.search(f'^{i}(;|:|$)', y) == None]) or '*'
+		return ';'.join([y for y in x.split(';') if re.search(rf'^{i}(;|:|$)', y) == None]) or '*'
 	def h(tl):
 		
 		return [
@@ -328,11 +332,11 @@ def remove_VMWE(x):
 			for i in {
 				y 
 				for x in tl
-				for y in re.findall(f'(\d+)', x['parseme:mwe'])
+				for y in re.findall(r'(\d+)', x['parseme:mwe'])
 			}
 			if tl.filter(**{
 				'parseme:mwe':
-				lambda x: re.search(f'(?:;|^){i}:\w+?\|(MWE-).+?\|.+', x) != None
+				lambda x: re.search(rf'(?:;|^){i}:\w+?\|(MWE-).+?\|.+', x) != None
 			})
 		]
 
@@ -344,7 +348,7 @@ def remove_VMWE(x):
 
 def remove_nVMWE(x):
 	def f(i, x):
-		return ';'.join([y for y in x.split(';') if re.search(f'^{i}(;|:|$)', y) == None]) or '*'
+		return ';'.join([y for y in x.split(';') if re.search(rf'^{i}(;|:|$)', y) == None]) or '*'
 	def h(tl):
 		
 		return [
@@ -352,11 +356,11 @@ def remove_nVMWE(x):
 			for i in {
 				y 
 				for x in tl
-				for y in re.findall(f'(\d+)', x['parseme:mwe'])
+				for y in re.findall(r'(\d+)', x['parseme:mwe'])
 			}
 			if tl.filter(**{
 				'parseme:mwe':
-				lambda x: re.search(f'(?:;|^){i}:\w+?\|(MWE(?!-)).*?\|.+', x) != None
+				lambda x: re.search(rf'(?:;|^){i}:\w+?\|(MWE(?!-)).*?\|.+', x) != None
 			})
 		]
 
@@ -367,13 +371,13 @@ def remove_nVMWE(x):
 	return res
 
 
-regex_map_cache = {i : re.compile(f'(;|^){i}(;|:|$)') for i in range(10)}
+regex_map_cache = {i : re.compile(rf'(;|^){i}(;|:|$)') for i in range(10)}
 def regex_map(i):
 	if not i in regex_map_cache:
-		regex_map_cache[i] = re.compile(f'(;|^){i}(;|:|$)')
+		regex_map_cache[i] = re.compile(rf'(;|^){i}(;|:|$)')
 	return regex_map_cache[i]
 
-regex1 = re.compile('(\d+)')
+regex1 = re.compile(r'(\d+)')
 
 
 
@@ -402,7 +406,7 @@ def get_mwes(df : DataFrame) -> DataFrame[tuple[SENTENCE_ID, TOKEN_ID, MWE_ID], 
 		return locmap(
 			df,
 			'parseme:mwe',
-			lambda x: re.search(f'(;|^){1}(;|:|$)', x) != None
+			lambda x: re.search(rf'(;|^){1}(;|:|$)', x) != None
 		).assign(mwe_id=0).set_index('mwe_id', append=True)
 
 	

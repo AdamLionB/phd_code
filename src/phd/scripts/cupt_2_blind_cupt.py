@@ -7,16 +7,7 @@ import sys
 import os
 import re
 
-
-
-
-if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage: python cupt_2_blind_cupt.py <cupt_file>")
-        sys.exit(1)
-
-    cupt_file = sys.argv[1]
-
+def main(cupt_file):
     if not os.path.isfile(cupt_file):
         print(f"Error: {cupt_file} is not a file")
         sys.exit(1)
@@ -36,7 +27,7 @@ if __name__ == "__main__":
             # if line is not a comment line (starts with #) and not empty, replace the mwe_col column (the label) with `_`
             # write the line to a new file with the same name but with .blind.cupt extension
             
-            out_f.write(header + "\n")
+            out_f.write(header)
             
             for line in in_f:
                 if line.startswith("#") or line.strip() == "":
@@ -47,3 +38,11 @@ if __name__ == "__main__":
                     parts[mwe_col] = "_"
                     out_f.write("\t".join(parts) + "\n")
             print(f"Blind cupt file written to {blind_cupt_file}")
+
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print("Usage: python cupt_2_blind_cupt.py <cupt_file>")
+        sys.exit(1)
+    main(sys.argv[1])

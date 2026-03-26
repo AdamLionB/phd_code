@@ -1,7 +1,7 @@
 from .diversity_indices import diversity_eval
 from .performance_indices import P_R_F
-from cupt_parser import DataFrame, inline_mwes
-from lambda_css_utils import SENTENCE_ID, MWE_ID, TOKEN_ID, fmset
+from ..cupt_parser import DataFrame, inline_mwes
+from ..utils import SENTENCE_ID, MWE_ID, TOKEN_ID, fmset
 import pandas as pd
 
 def full_eval(

@@ -1,5 +1,5 @@
-from cupt_parser import DataFrame
-from lambda_css_utils import SENTENCE_ID, MWE_ID, TOKEN_ID, fmset
+from ..cupt_parser import DataFrame
+from ..utils import SENTENCE_ID, MWE_ID, TOKEN_ID, fmset
 # import cupt_parser
 
 def P_R_F(
