@@ -156,21 +156,21 @@ class Cupt_parser:
 		return next(self.get_df_per_batch(0))
 
 	def get_df_no_tt_per_batch(self, batch_size):
-		lines = [
-			((self._counter + m, token['id']), {**token})
-			for m, tl in enumerate(self.read_next_n(batch_size))
-			for token in tl
-		]
-		index, rows = zip(*lines) if lines else ([], [])
-		df = DataFrame(list(rows), index=index)
-		# df =  DataFrame.from_dict(
-		# 	{
-		# 		(self._counter + m, token['id']): {**token}
-		# 		for m, tl in enumerate(self.read_next_n(batch_size))
-		# 		for token in tl
-		# 	},
-		# 		orient='index'
-		# )
+		# lines = [
+		# 	((self._counter + m, token['id']), {**token})
+		# 	for m, tl in enumerate(self.read_next_n(batch_size))
+		# 	for token in tl
+		# ]
+		# index, rows = zip(*lines) if lines else ([], [])
+		# df = DataFrame(list(rows), index=index)
+		df =  DataFrame.from_dict(
+			{
+				(self._counter + m, token['id']): {**token}
+				for m, tl in enumerate(self.read_next_n(batch_size))
+				for token in tl
+			},
+				orient='index'
+		)
 		df.index = df.index.rename(['sentence_id', 'token_id'])
 		for f in self._postprocessing:
 			df = f(df)
@@ -382,8 +382,9 @@ def get_mwes(df : DataFrame) -> DataFrame[tuple[SENTENCE_ID, TOKEN_ID, MWE_ID], 
 	with only token from MWEs. If a token is part of multiple MWE it is duplicated.
 
 	'''
+
 	try:
-		return pd.concat([
+		items = [
 			locmap(
 				sentence,
 				'parseme:mwe',
@@ -397,8 +398,10 @@ def get_mwes(df : DataFrame) -> DataFrame[tuple[SENTENCE_ID, TOKEN_ID, MWE_ID], 
 				)
 				for y in x
 			} # for each number associated to a MWE component in the sentence
-		]).set_index('mwe_id', append=True)
-	except:
+		]
+		return pd.concat(items).set_index('mwe_id', append=True)
+	except Exception as e:
+		print(f"Error occurred: {e}")
 		return locmap(
 			df,
 			'parseme:mwe',
@@ -407,15 +410,29 @@ def get_mwes(df : DataFrame) -> DataFrame[tuple[SENTENCE_ID, TOKEN_ID, MWE_ID], 
 
 	
 
+# def inline_mwes(
+# 	mwes : DataFrame[tuple[SENTENCE_ID, TOKEN_ID, MWE_ID], tuple]
+# ) -> DataFrame[tuple[SENTENCE_ID], tuple[utils.fmset, tuple]]:
+# 	tmp = mwes.groupby(level=[0, 2]).apply(
+# 		lambda x : (utils.fmset(list(x['lemma'])), tuple(x['id']))
+# 	).apply(lambda x: pd.Series(x))
+# 	return tmp.reset_index(
+# 		'mwe_id',
+# 		drop=True
+# 	).reset_index().drop_duplicates().set_index('sentence_id')
 def inline_mwes(
 	mwes : DataFrame[tuple[SENTENCE_ID, TOKEN_ID, MWE_ID], tuple]
 ) -> DataFrame[tuple[SENTENCE_ID], tuple[utils.fmset, tuple]]:
-	tmp = mwes.groupby(level=[0, 2]).apply(
+	grouped = mwes.groupby(level=[0, 2]).apply(
 		lambda x : (utils.fmset(list(x['lemma'])), tuple(x['id']))
-	).apply(lambda x: pd.Series(x))
+	)
+	tmp = pd.DataFrame(
+		[[v[0], v[1]] for v in grouped],
+		index=grouped.index,
+		columns=[0, 1]
+	)
 	return tmp.reset_index(
 		'mwe_id',
 		drop=True
 	).reset_index().drop_duplicates().set_index('sentence_id')
-
 

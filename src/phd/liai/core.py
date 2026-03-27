@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import psutil, os
 import torch.optim as optim
-from transformers import BertTokenizer, BertModel
+# from transformers import BertTokenizer, BertModel
 from .. import cupt_parser
 from .. import utils
 import numpy as np
@@ -314,11 +314,11 @@ class Merger_mtlb(nn.Module):
 		return out
 
 class Merger_with_padding_mask(nn.Module):
-	def __init__(self, nb_annotateurs, frozen, device) -> None:
+	def __init__(self, nb_annotateurs, frozen, device, bert_custom_cache=None) -> None:
 		# super(Merger_with_padding_mask, self).__init__()
 		super().__init__()
 		self.device = device
-		self.bert = liai_model.Bert_first_word(device, shorten=True)
+		self.bert = liai_model.Bert_first_word(device, custom_cache=bert_custom_cache, shorten=True)
 		self.classifier = nn.Sequential(
 			# nn.TransformerEncoder(nn.TransformerEncoderLayer(768 + nb_annotateurs, 4), 2),
 			# nn.Tanh(),
@@ -384,25 +384,37 @@ def merger_candidates(a, b):
 
 def build_candidate_table_and_labels(a, b, truth):
 	candidates = merger_candidates(a, b)
-
-	return (
-		pd.merge(
-			candidates,
-			truth[truth.apply(lambda x: 1 in x)].apply(tuple).to_frame().reset_index(),
-			how='outer',
-			indicator='truth',
-			left_on=[0, 'sentence_id'],
-			right_on=[0, 'sentence_id'],
-			sort=True
-		).dropna()['truth'].apply(lambda x: (x == 'both') | (x == 'right_only')),
-		candidates.transform(
-			lambda x: [
-				x['sentence_id'],
-				x[0] if x['_merge'] == 'left_only' or x['_merge'] == 'both' else None,
-				x[0] if x['_merge'] == 'right_only' or x['_merge'] == 'both' else None
-			], axis=1
-		).fillna(-1).apply(lambda col: col.map(lambda x: x if x != -1 else tuple([0]*len(a.iloc[0]))))
+	merged = pd.merge(
+		candidates,
+		truth[truth.apply(lambda x: 1 in x)].apply(tuple).to_frame().reset_index(),
+		how='outer',
+		indicator='truth',
+		left_on=[0, 'sentence_id'],
+		right_on=[0, 'sentence_id'],
+		sort=True
 	)
+	labels = merged.dropna()['truth'].apply(lambda x: (x == 'both') | (x == 'right_only'))
+
+	res2 = candidates.apply(
+		lambda x: pd.Series([
+			x['sentence_id'],
+			x[0] if x['_merge'] in ('left_only', 'both') else None,
+			x[0] if x['_merge'] in ('right_only', 'both') else None
+		], index=candidates.columns),
+		axis=1
+	).fillna(-1)
+
+	# res2 = candidates.transform(
+	# 	lambda x: [
+	# 		x['sentence_id'],
+	# 		x[0] if x['_merge'] == 'left_only' or x['_merge'] == 'both' else None,
+	# 		x[0] if x['_merge'] == 'right_only' or x['_merge'] == 'both' else None
+	# 	], axis=1
+	# ).fillna(-1)
+	# print(res2)
+	res2 =res2.apply(lambda col: col.map(lambda x: x if x != -1 else tuple([0]*len(a.iloc[0]))))
+	# res2 = res2.apply(lambda x: x if x != -1 else tuple([0]*len(a.iloc[0])))
+	return labels, res2
 
 max_f = 0
 from math import log
@@ -558,14 +570,14 @@ def eval_model(model, sentences_test, Y_truth_test, data_test=None, truth_test=N
 		# 	y = len(Y_truth[lambda x: x.apply(lambda x: 1 in x)]) // 4
 		# else:
 		to_predict = len(Y_truth_test[lambda x: x.apply(lambda x: 1 in x)])
-		y = int(pd.Series(truth_test).astype(bool).sum())
+		# y = int(pd.Series(truth_test).astype(bool).sum())
 		p = (tp / predicted).item() if predicted.item() != 0 else 0
 		r = (tp / to_predict).item()
 
-		print(y, to_predict)
-		r2 = (tp / y).item() if y != 0 else 0
-		f2 = (2 * p * r2) / (p + r2) if r2+p != 0 else 0
-		print(r2, f2)
+		# print(y, to_predict)
+		# r2 = (tp / y).item() if y != 0 else 0
+		# f2 = (2 * p * r2) / (p + r2) if r2+p != 0 else 0
+		# print(r2, f2)
 		
 		if wnb:
 			wandb.log({
@@ -592,8 +604,8 @@ def eval_model(model, sentences_test, Y_truth_test, data_test=None, truth_test=N
 		'precision': p,
 		'recall': r,
 		'f1': (2 * p * r) / (p + r) if r+p != 0 else 0,
-		'true positive': tp,
-		'predicted': predicted,
+		'true positive': tp.item(),
+		'predicted': predicted.item(),
 		'to_predict': to_predict,
 		'max_possible_r': to_predict_seen / to_predict,
 		'max_possible_f': (2 * (to_predict_seen / to_predict)) / ((to_predict_seen / to_predict) + 1),
@@ -609,7 +621,10 @@ def merger_preprocessing(sentences, data, model, device):
 			data[[0, '_merge']].apply(lambda col: col.map(list)).values.tolist(), device=device
 		).transpose(-1, -2), split_size_or_sections=1, dim=-1
 	)
+	# return sentences, (a.bool() & ~b.bool()).float(), (~a.bool() & b.bool()).float(), (a & b).float(), (a | b).float()
 	return sentences, a, b, (a & b).float(), (a | b).float()
+	# print(a)
+	# return sentences, torch.rand(a.shape, device=device), torch.rand(a.shape, device=device), torch.rand(a.shape, device=device), torch.rand(a.shape, device=device)
 	# print(a.shape, b.shape, len(sentences))
 	return  model(
 		sentences,

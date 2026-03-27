@@ -59,7 +59,8 @@ def file2ts(file, voc, max_len = 0, split= 1):
 
 	with mo.status.spinner('Extracting MWEs'):
 		t = time.perf_counter()
-		mwes = cupt_parser.inline_mwes(cupt_parser.get_mwes(DATA))
+		mwe_df = cupt_parser.get_mwes(DATA)
+		mwes = cupt_parser.inline_mwes(mwe_df)
 		# print(f"MWE extracted in {time.perf_counter() - t} seconds")
 
 	with mo.status.spinner('Creating mask'):
