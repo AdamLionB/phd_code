@@ -187,6 +187,18 @@ class LambdaCSS(Generic[P]):
 		# 	self.cache = hash(frozenset(self.prop.items())) + hash(self.children)
 		# return self.cache
 		return hash(frozenset(self.prop.items())) #+ hash(self.children)
+	def to_json_dict(self) -> dict:
+		return {
+			'prop': self.prop,
+			'children': [c.to_json_dict() for c in self.children],
+			'dummy': self.dummy,
+		}
+
+	@classmethod
+	def from_json_dict(cls, data: dict, spec: LambdaCSS_spec) -> 'LambdaCSS':
+		children = [cls.from_json_dict(c, spec) for c in data['children']]
+		return cls(data['prop'], children, spec, data['dummy'])
+
 	def kinda_equal(self : LambdaCSS, tt: TT) -> bool:
 		# TODO rename to root_match
 		''' Checks if the lambda-CSS root node properties are equal to the TokenTree

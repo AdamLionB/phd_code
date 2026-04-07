@@ -21,6 +21,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 parseme_path = '../data/parseme'
+parseme_version = '1.3'
 liai_path = '../data/liai'
 
 console = rich.console.Console()
@@ -28,15 +29,15 @@ console = rich.console.Console()
 # %%
 voc = liai.prep.Voc()
 with console.status('loading data') as spinner:
-	spinner.update(f'loading {parseme_path}/1.2/{LANG}/{DEVorTEST}.mtlb_trained_on_train.cupt')
-# print(f'loading {parseme_path}/1.2/{LANG}/{DEVorTEST}.system.cupt')
-	test_sentences, Y_system_test = (tmp_tuple:=liai.prep.file2ts(f'{parseme_path}/1.2/{LANG}/{DEVorTEST}.mtlb_trained_on_train.cupt', voc, 0, 1))[0], tmp_tuple[5]
+	spinner.update(f'loading {parseme_path}/{parseme_version}/{LANG}/{DEVorTEST}.mtlb_trained_on_train.cupt')
+# print(f'loading {parseme_path}/{parseme_version}/{LANG}/{DEVorTEST}.system.cupt')
+	test_sentences, Y_system_test = (tmp_tuple:=liai.prep.file2ts(f'{parseme_path}/{parseme_version}/{LANG}/{DEVorTEST}.mtlb_trained_on_train.cupt', voc, 0, 1))[0], tmp_tuple[5]
 
-	spinner.update(f'loading {parseme_path}/1.2/{LANG}/{DEVorTEST}.lex_lem_dep_css.cupt')
-	Y_lex_test= liai.prep.file2ts(f'{parseme_path}/1.2/{LANG}/{DEVorTEST}.lex_lem_dep_css.cupt', voc, 0, 1)[5]
+	spinner.update(f'loading {parseme_path}/{parseme_version}/{LANG}/{DEVorTEST}.lex_lem_dep_css.cupt')
+	Y_lex_test= liai.prep.file2ts(f'{parseme_path}/{parseme_version}/{LANG}/{DEVorTEST}.lex_lem_dep_css.cupt', voc, 0, 1)[5]
 
-	spinner.update(f'loading {parseme_path}/1.2/{LANG}/{DEVorTEST}.cupt')
-	Y_truth_test = liai.prep.file2ts(f'{parseme_path}/1.2/{LANG}/{DEVorTEST}.cupt', voc, 0, 1)[5]
+	spinner.update(f'loading {parseme_path}/{parseme_version}/{LANG}/{DEVorTEST}.cupt')
+	Y_truth_test = liai.prep.file2ts(f'{parseme_path}/{parseme_version}/{LANG}/{DEVorTEST}.cupt', voc, 0, 1)[5]
 
 #%%
 with console.status('loading model') as spinner:
@@ -55,7 +56,7 @@ with console.status('loading model') as spinner:
 #%%
 # with console.status('evaluating model') as spinner:
 # spinner.update('setting up test data')
-df_test = cupt_parser.setup_data_noTT(f'{parseme_path}/1.2/{LANG}/{DEVorTEST}.cupt')
+df_test = cupt_parser.setup_data_noTT(f'{parseme_path}/{parseme_version}/{LANG}/{DEVorTEST}.cupt')
 # spinner.update('building candidate table and labels')
 truth_test, data_test = liai.build_candidate_table_and_labels(Y_system_test, Y_lex_test, Y_truth_test)
 # spinner.update('evaluating model')

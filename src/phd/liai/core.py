@@ -562,10 +562,6 @@ def eval_model(model, sentences_test, Y_truth_test, data_test=None, truth_test=N
 		p = (tp / predicted).item() if predicted.item() != 0 else 0
 		r = (tp / to_predict).item()
 
-		print(y, to_predict)
-		r2 = (tp / y).item() if y != 0 else 0
-		f2 = (2 * p * r2) / (p + r2) if r2+p != 0 else 0
-		print(r2, f2)
 		
 		if wnb:
 			wandb.log({
