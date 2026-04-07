@@ -2,6 +2,7 @@
 from typing import Iterator,Callable, Any, Union, Optional, NewType
 from conllu import TokenList, parse_incr, TokenTree
 import pandas as pd
+import os
 
 from itertools import chain, takewhile, count
 import re
@@ -387,30 +388,24 @@ def get_mwes(df : DataFrame) -> DataFrame[tuple[SENTENCE_ID, TOKEN_ID, MWE_ID], 
 
 	'''
 
-	try:
-		items = [
-			locmap(
-				sentence,
-				'parseme:mwe',
-				lambda x: re.search(regex_map(i), x) != None
-			).assign(mwe_id=i) # gets the token associated to the number i
-			for _, sentence in df.groupby(level=0) # for each sentence
-			for i in {
-				y
-				for x in sentence['parseme:mwe'].apply(
-					lambda x: re.findall(regex1, x)
-				)
-				for y in x
-			} # for each number associated to a MWE component in the sentence
-		]
-		return pd.concat(items).set_index('mwe_id', append=True)
-	except Exception as e:
-		print(f"Error occurred: {e}")
-		return locmap(
-			df,
+	items = [
+		locmap(
+			sentence,
 			'parseme:mwe',
-			lambda x: re.search(rf'(;|^){1}(;|:|$)', x) != None
-		).assign(mwe_id=0).set_index('mwe_id', append=True)
+			lambda x: re.search(regex_map(i), x) != None
+		).assign(mwe_id=i) # gets the token associated to the number i
+		for _, sentence in df.groupby(level=0) # for each sentence
+		for i in {
+			y
+			for x in sentence['parseme:mwe'].apply(
+				lambda x: re.findall(regex1, x)
+			)
+			for y in x
+		} # for each number associated to a MWE component in the sentence
+	]
+	if not items:
+		return pd.DataFrame()
+	return pd.concat(items).set_index('mwe_id', append=True)
 
 	
 
@@ -440,3 +435,91 @@ def inline_mwes(
 		drop=True
 	).reset_index().drop_duplicates().set_index('sentence_id')
 
+
+def write_matches_as_dcupt(
+	matches: DataFrame,
+	base_blind_path: str,
+	output_path: str,
+):
+	"""Write lexicon match results as a .dcupt file.
+
+	Converts a match DataFrame (with sentence_id, token_id, mwe_id multi-index)
+	into a .dcupt file that overrides PARSEME:MWE in the base blind cupt.
+
+	Parameters
+	----------
+	matches : DataFrame
+		Match results with (sentence_id, token_id, mwe_id) multi-index.
+	base_blind_path : str
+		Path to the base blind .cupt file.
+	output_path : str
+		Where to write the .dcupt file.
+	"""
+	from . import dcupt
+
+	# Read sentence structure from base file: list of token ID strings per sentence
+	sentences_structure = []
+	current = []
+	with open(base_blind_path, 'r', encoding='utf-8') as f:
+		for line in f:
+			stripped = line.strip()
+			if not stripped:
+				if current:
+					sentences_structure.append(current)
+					current = []
+			elif not stripped.startswith('#'):
+				current.append(stripped.split('\t')[0])
+	if current:
+		sentences_structure.append(current)
+
+	overrides = {}
+	if matches.empty:
+		for i in range(len(sentences_structure)):
+			overrides[(0, i)] = []
+	else:
+		matched_sents = set(matches.index.get_level_values('sentence_id').unique())
+		for sent_idx, token_id_strs in enumerate(sentences_structure):
+			if sent_idx not in matched_sents:
+				overrides[(0, sent_idx)] = []
+				continue
+
+			sent_matches = matches.loc[[sent_idx]]
+			sent_matches = sent_matches.droplevel('sentence_id')
+			token_mwe_map = {}
+			for mwe_num, (mwe_id, group) in enumerate(
+				sent_matches.groupby(level='mwe_id'), 1
+			):
+				tids = sorted(group.index.get_level_values('token_id'))
+				for i, tid in enumerate(tids):
+					if tid not in token_mwe_map:
+						token_mwe_map[tid] = []
+					token_mwe_map[tid].append((mwe_num, i == 0))
+
+			annotations = []
+			for tid_str in token_id_strs:
+				try:
+					tid = int(tid_str)
+				except (ValueError, TypeError):
+					annotations.append('*')
+					continue
+				if tid in token_mwe_map:
+					parts = []
+					for mwe_num, is_first in token_mwe_map[tid]:
+						parts.append(f'{mwe_num}:MWE' if is_first else str(mwe_num))
+					annotations.append(';'.join(parts))
+				else:
+					annotations.append('*')
+			overrides[(0, sent_idx)] = annotations
+
+	base_ref = os.path.relpath(
+		os.path.abspath(base_blind_path),
+		os.path.dirname(os.path.abspath(output_path))
+	)
+
+	dcupt.create(
+		output_path=output_path,
+		base_ref=base_ref,
+		columns=['PARSEME:MWE'],
+		default_value='*',
+		overrides=overrides,
+	)
