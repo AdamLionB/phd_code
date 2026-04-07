@@ -23,10 +23,14 @@ class Simple_Wrapper(nn.Module):
 
 
 class Bert_first_word(nn.Module):
-	def __init__(self, device, shorten=True) -> None:
+	def __init__(self, device, custom_cache=None, shorten=True) -> None:
 		super().__init__()
-		self.tokenizer = BertTokenizer.from_pretrained('bert-base-multilingual-cased')
-		self.embedding = BertModel.from_pretrained("bert-base-multilingual-cased").to(device)
+		if custom_cache:
+			self.tokenizer = BertTokenizer.from_pretrained(custom_cache)
+			self.embedding = BertModel.from_pretrained(custom_cache).to(device)
+		else:
+			self.tokenizer = BertTokenizer.from_pretrained('bert-base-multilingual-cased')
+			self.embedding = BertModel.from_pretrained("bert-base-multilingual-cased").to(device)
 		self.device = device
 		self.shorten = shorten
 	def forward(self, sentences):

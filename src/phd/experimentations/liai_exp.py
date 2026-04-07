@@ -1,14 +1,15 @@
 
 # %%
-%load_ext autoreload
-%autoreload 2
-import importlib
-import phd.liai.core as liai_core
-importlib.reload(liai_core)
-import phd.liai as liai  # re-runµthe star import
-importlib.reload(liai)
+# %load_ext autoreload
+# %autoreload 2
+# import importlib
+# import phd.liai.core as liai_core
+# importlib.reload(liai_core)
+# import phd.liai as liai  # re-runµthe star import
+# importlib.reload(liai)
 # %%
 from phd import liai, utils, cupt_parser
+# from phd import model_copy, merger
 import torch
 import rich.console
 
@@ -40,8 +41,15 @@ with console.status('loading data') as spinner:
 	Y_truth_test = liai.prep.file2ts(f'{parseme_path}/{parseme_version}/{LANG}/{DEVorTEST}.cupt', voc, 0, 1)[5]
 
 #%%
+from pathlib import Path
 with console.status('loading model') as spinner:
-	model = liai.Merger_with_padding_mask(4, frozen, device).to(device)
+	bert_custom_cache = str(Path('~/.cache/huggingface/hub/models--bert-base-multilingual-cased/snapshots/fdfce55e83dbed325647a63e7e1f5de19f0382ba').expanduser().resolve())
+	# bert_custom_cache = None
+
+	model = liai.Merger_with_padding_mask(4, frozen, device, bert_custom_cache=bert_custom_cache).to(device)
+	# model = liai.Merger_with_padding_mask(4, frozen, device, bert_custom_cache=Path('~/.cache/huggingface/hub/models--bert-base-multilingual-cased/snapshots/3f076fdb1ab68d5b2880cb87a0886f315b8146f8/')).to(device)
+	# model = liai.Merger_with_padding_mask(4, frozen, device, bert_custom_cache='~/.cache/huggingface/hub/models--bert-base-multilingual-cased/snapshots/fdfce55e83dbed325647a63e7e1f5de19f0382ba').to(device)
+
 
 
 	state_dict = torch.load(
@@ -50,8 +58,13 @@ with console.status('loading model') as spinner:
 	)
 	# position_ids was a persistent buffer in older transformers versions; it is
 	# non-persistent in newer ones, so we drop it to allow strict loading.
-	state_dict.pop('bert.embedding.embeddings.position_ids', None)
-	model.load_state_dict(state_dict)
+	try:
+		# for older versions of transformers
+		model.load_state_dict(state_dict)
+	except:
+		# for newer versions of transformers
+		state_dict.pop('bert.embedding.embeddings.position_ids', None)
+		model.load_state_dict(state_dict)
 
 #%%
 # with console.status('evaluating model') as spinner:
