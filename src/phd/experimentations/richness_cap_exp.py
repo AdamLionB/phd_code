@@ -271,11 +271,10 @@ console.print(f'Recap saved to [green]{recap_path}[/green]')
 
 # %%
 # ---------------------------------------------------------------------------
-# LIAI evaluation (placeholder)
+# LIAI evaluation
 # ---------------------------------------------------------------------------
-# Once mtlb system predictions are available at
+# Requires mtlb system predictions at
 #   {lang_dir}/test.mtlb_trained_on_train.cupt
-# the following block will run the LIAI merger for each capped annotation.
 
 from phd import liai
 import torch
@@ -284,47 +283,100 @@ from pathlib import Path
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 liai_path = '../data/liai'
 
+liai_results = []
+
 for lang in langs:
-    lang_dir = f'{PARSEME_PATH}/{PARSEME_VERSION}/{lang}'
-    system_path = f'{lang_dir}/test.mtlb_trained_on_train.cupt'
-    if not os.path.exists(system_path):
-        continue
+	lang_dir = f'{PARSEME_PATH}/{PARSEME_VERSION}/{lang}'
+	system_path = f'{lang_dir}/test.mtlb_trained_on_train.cupt'
+	if not os.path.exists(system_path):
+		console.print(f'[yellow]{lang}: no mtlb system predictions, skipping LIAI[/yellow]')
+		continue
 
-    voc = liai.prep.Voc()
-    test_sentences, Y_system = (
-        t := liai.prep.file2ts(system_path, voc, 0, 1)
-    )[0], t[5]
-    Y_truth = liai.prep.file2ts(f'{lang_dir}/test.cupt', voc, 0, 1)[5]
+	console.print(f'\n[bold]=== LIAI {lang} ===[/bold]')
 
-    # bert_cache = str(Path(
-    #     '~/.cache/huggingface/hub/models--bert-base-multilingual-cased/'
-    #     'snapshots/fdfce55e83dbed325647a63e7e1f5de19f0382ba'
-    # ).expanduser().resolve())
-    bert_cache = None
+	voc = liai.prep.Voc()
+	with console.status(f'Loading system predictions for {lang}...'):
+		test_sentences, Y_system = (
+			t := liai.prep.file2ts(system_path, voc, 0, 1)
+		)[0], t[5]
+		Y_truth = liai.prep.file2ts(f'{lang_dir}/test.cupt', voc, 0, 1)[5]
 
-    model = liai.Merger_with_padding_mask(
-        4, False, device, bert_custom_cache=bert_cache
-    ).to(device)
-    state_dict = torch.load(
-        f'{liai_path}/45_merger_masked.model', map_location=device
-    )
-    state_dict.pop('bert.embedding.embeddings.position_ids', None)
-    model.load_state_dict(state_dict)
+	# bert_cache = str(Path(
+	#     '~/.cache/huggingface/hub/models--bert-base-multilingual-cased/'
+	#     'snapshots/fdfce55e83dbed325647a63e7e1f5de19f0382ba'
+	# ).expanduser().resolve())
+	bert_cache = None
 
-    df_test = cupt_parser.setup_data_noTT(f'{lang_dir}/test.cupt')
+	with console.status(f'Loading LIAI model for {lang}...'):
+		model = liai.Merger_with_padding_mask(
+			4, False, device, bert_custom_cache=bert_cache
+		).to(device)
+		state_dict = torch.load(
+			f'{liai_path}/45_merger_masked.model', map_location=device
+		)
+		state_dict.pop('bert.embedding.embeddings.position_ids', None)
+		model.load_state_dict(state_dict)
 
-    for spec_name in SPECS:
-        for k_label in ['full'] + [f'K{k}' for k in K_VALUES]:
-            lex_dcupt = f'{lang_dir}/test.lex_{spec_name}_{k_label}.dcupt'
-            if not os.path.exists(lex_dcupt):
-                continue
-            Y_lex = liai.prep.file2ts(lex_dcupt, voc, 0, 1)[5]
-            truth_data, test_data = liai.build_candidate_table_and_labels(
-                Y_system, Y_lex, Y_truth
-            )
-            liai.eval_model(
-                model, test_sentences, Y_truth,
-                test_data, truth_data, df_test, device, 100
-            )
+	df_test_liai = cupt_parser.setup_data_noTT(f'{lang_dir}/test.cupt')
+
+	k_labels = (
+		[('none', 'full')]
+		+ [('innate', f'K{k}') for k in K_VALUES]
+		+ [('observational', f'obsK{k}') for k in K_VALUES]
+	)
+
+	for spec_name in SPECS:
+		for cap_type, k_label in k_labels:
+			lex_dcupt = f'{lang_dir}/test.lex_{spec_name}_{k_label}.dcupt'
+			if not os.path.exists(lex_dcupt):
+				continue
+
+			console.print(f'  {spec_name} / {k_label}')
+			with console.status(f'LIAI eval {lang}/{spec_name}/{k_label}...'):
+				Y_lex = liai.prep.file2ts(lex_dcupt, voc, 0, 1)[5]
+				truth_data, test_data = liai.build_candidate_table_and_labels(
+					Y_system, Y_lex, Y_truth
+				)
+				eval_res = liai.eval_model(
+					model, test_sentences, Y_truth,
+					test_data, truth_data, df_test_liai, device, 100
+				)
+
+			k_val = k_label if k_label == 'full' else k_label.replace('K', '').replace('obs', '')
+			liai_results.append({
+				'lang': lang,
+				'spec': spec_name,
+				'cap': cap_type,
+				'K': k_val,
+				**eval_res,
+			})
+			console.print(
+				f'    P={eval_res["precision"]:.3f} '
+				f'R={eval_res["recall"]:.3f} '
+				f'F={eval_res["f1"]:.3f}'
+			)
+
+# %%
+# ---------------------------------------------------------------------------
+# Save LIAI results
+# ---------------------------------------------------------------------------
+
+if liai_results:
+	df_liai = pd.DataFrame.from_records(liai_results)
+	console.print('\n[bold]LIAI Results table[/bold]')
+	console.print(df_liai.to_string())
+
+	os.makedirs(RESULTS_DIR, exist_ok=True)
+
+	liai_detail_path = os.path.join(RESULTS_DIR, 'liai_detail.csv')
+	df_liai.to_csv(liai_detail_path, index=False)
+	console.print(f'\nLIAI detail saved to [green]{liai_detail_path}[/green]')
+
+	liai_recap_cols = ['lang', 'spec', 'cap', 'K', 'precision', 'recall', 'f1', 'richness', 'E_1mD', 'expS']
+	liai_recap_cols = [c for c in liai_recap_cols if c in df_liai.columns]
+	df_liai_recap = df_liai[liai_recap_cols].copy()
+	liai_recap_path = os.path.join(RESULTS_DIR, 'liai_recap.csv')
+	df_liai_recap.to_csv(liai_recap_path, index=False)
+	console.print(f'LIAI recap saved to [green]{liai_recap_path}[/green]')
 
 # %%
