@@ -36,6 +36,7 @@ console = rich.console.Console()
 PARSEME_PATH = '../data/parseme'
 PARSEME_VERSION = '1.2'
 LEXICON_DIR = '../data/lexicons/richness_cap'
+RESULTS_DIR = '../data/results/richness_cap'
 
 K_VALUES = [16, 32, 64, 128, 256, 512, 1024, 2048]
 SEED = 42
@@ -250,6 +251,26 @@ console.print(df_results.to_string())
 
 # %%
 # ---------------------------------------------------------------------------
+# Save results to CSV
+# ---------------------------------------------------------------------------
+
+os.makedirs(RESULTS_DIR, exist_ok=True)
+
+# Detail: all columns, one row per (lang, spec, cap, K)
+detail_path = os.path.join(RESULTS_DIR, 'detail.csv')
+df_results.to_csv(detail_path, index=False)
+console.print(f'\nDetail saved to [green]{detail_path}[/green]')
+
+# Recap: key metrics only
+recap_cols = ['lang', 'spec', 'cap', 'K', 'richness', 'n_entries', 'p', 'r', 'f']
+recap_cols = [c for c in recap_cols if c in df_results.columns]
+df_recap = df_results[recap_cols].copy()
+recap_path = os.path.join(RESULTS_DIR, 'recap.csv')
+df_recap.to_csv(recap_path, index=False)
+console.print(f'Recap saved to [green]{recap_path}[/green]')
+
+# %%
+# ---------------------------------------------------------------------------
 # LIAI evaluation (placeholder)
 # ---------------------------------------------------------------------------
 # Once mtlb system predictions are available at
@@ -275,10 +296,11 @@ for lang in langs:
     )[0], t[5]
     Y_truth = liai.prep.file2ts(f'{lang_dir}/test.cupt', voc, 0, 1)[5]
 
-    bert_cache = str(Path(
-        '~/.cache/huggingface/hub/models--bert-base-multilingual-cased/'
-        'snapshots/fdfce55e83dbed325647a63e7e1f5de19f0382ba'
-    ).expanduser().resolve())
+    # bert_cache = str(Path(
+    #     '~/.cache/huggingface/hub/models--bert-base-multilingual-cased/'
+    #     'snapshots/fdfce55e83dbed325647a63e7e1f5de19f0382ba'
+    # ).expanduser().resolve())
+    bert_cache = None
 
     model = liai.Merger_with_padding_mask(
         4, False, device, bert_custom_cache=bert_cache
