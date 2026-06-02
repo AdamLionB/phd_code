@@ -611,6 +611,42 @@ def eval_model(model, sentences_test, Y_truth_test, data_test=None, truth_test=N
 	}
 # import .prep
 
+def build_candidate_table(a, b):
+	candidates = merger_candidates(a, b)
+	res2 = candidates.apply(
+		lambda x: pd.Series([
+			x['sentence_id'],
+			x[0] if x['_merge'] in ('left_only', 'both') else None,
+			x[0] if x['_merge'] in ('right_only', 'both') else None
+		], index=candidates.columns),
+		axis=1
+	).fillna(-1)
+	res2 = res2.apply(lambda col: col.map(lambda x: x if x != -1 else tuple([0]*len(a.iloc[0]))))
+	return res2
+
+
+def predict(model, sentences, Y_system, Y_lex, device=None, batch_size=bs):
+	if device is None:
+		device = model.device
+	model.eval()
+	data = build_candidate_table(Y_system, Y_lex)
+	all_ids = np.arange(len(data))
+	predictions = []
+	with torch.inference_mode():
+		pbar = tqdm(list(range(len(all_ids) // batch_size + 1)))
+		for i in pbar:
+			batch_ids = all_ids[i * batch_size:i * batch_size + batch_size]
+			if len(batch_ids) == 0:
+				continue
+			batch = data.iloc[batch_ids]
+			batch_sentences = sentences.loc[batch['sentence_id']]
+			merger_input = merger_preprocessing(batch_sentences, batch, model, device)
+			r = model(*merger_input)
+			predictions.append(r > 0)
+	mask = torch.cat(predictions).cpu().numpy()
+	return data[mask]
+
+
 def merger_preprocessing(sentences, data, model, device):
 	a, b = torch.split(
 		torch.tensor(
