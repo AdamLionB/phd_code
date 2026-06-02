@@ -107,7 +107,7 @@ if METHOD == 'intersection':
 	merged_pred_mwes = cupt_parser.intersection_mwes(lex_pred_mwes, system_pred_mwes)
 if METHOD == 'LIAI':
 	LIAI_PATH = '../data/liai'
-	DEVICE = 'cpu'
+	DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 	FROZEN = False
 	print('Loading LIAI model')
 	liai_model = liai.Merger_with_padding_mask(4, FROZEN, DEVICE).to(DEVICE)
@@ -133,6 +133,29 @@ if METHOD == 'LIAI':
 if METHOD == 'LIAI':
 	print('Predicting with LIAI')
 	liai_res = liai.predict(liai_model, test_sentences, Y_system_test, Y_lex_test, device=DEVICE, batch_size=1)
+
+
+	# df2ts remaps sentence_ids; reconstruct the reverse map (same Python session => same set() ordering)
+	_liai_rev_map = dict(enumerate(list(set(df_system_pred.reset_index()['sentence_id']))))
+
+	# Build (original_sentence_id, frozenset_of_1indexed_token_ids) for every MWE in liai_res
+	_liai_mwe_sigs = set()
+	for _, row in liai_res.iterrows():
+		orig_sid = _liai_rev_map[row['sentence_id']]
+		tokens_0 = frozenset(i + 1 for i, v in enumerate(row[0]) if v == 1)
+		tokens_m = frozenset(i + 1 for i, v in enumerate(row['_merge']) if v == 1)
+		if tokens_0:
+			_liai_mwe_sigs.add((orig_sid, tokens_0))
+		if tokens_m:
+			_liai_mwe_sigs.add((orig_sid, tokens_m))
+	
+	# Filter union: keep only MWEs whose (sentence_id, token set) appears in liai_res
+	merged_pred_mwes = cupt_parser.union_mwes(lex_pred_mwes, system_pred_mwes).groupby(level=[0, 2]).filter(
+		lambda g: (
+			g.index.get_level_values('sentence_id')[0],
+			frozenset(g['id'])
+		) in _liai_mwe_sigs
+	)
 
 #%%
 merged_pred_inline_mwes = cupt_parser.inline_mwes(merged_pred_mwes)
