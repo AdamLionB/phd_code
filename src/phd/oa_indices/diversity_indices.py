@@ -15,61 +15,83 @@ def normalize(p):
 
 def Na(a, p):
 	p = normalize(p)
+	if a == 0:
+		return len(p)
+	if len(p) == 0:
+		return np.nan
 	if a == 1:
 		return 2 ** (- sum(x * log(x, b) if x != 0 else 0 for x in p))
-	try :
-		return sum(x ** a for x in p) ** (1 / (1 - a))
-	except ZeroDivisionError:
-		return 0
+	return sum(x ** a for x in p) ** (1 / (1 - a))
+
 
 def E(n, m, p):
+	if len(p) == 0:
+		return np.nan
 	p = normalize(p)
 	try :
 		return Na(n, p) / Na(m, p)
 	except ZeroDivisionError:
-		return 0
+		return np.nan
 
 def Ha(a, p):
+	if len(p) == 0:
+		return np.nan
 	p = normalize(p)
 	if a == 1:
 		return H(p)
 	return (1 / 1 - a) * log(sum(x ** a for x in p), b)
 
 def H(p):
+	if len(p) == 0:
+		return np.nan
 	p = normalize(p)
 	return - sum(x * log(x, b) for x in p)
 
 def J(p):
+	if len(p) == 0:
+		return np.nan
 	p = normalize(p)
 	return H(p) / log(Na(0, p), b)
 
 def F(n, m, p):
+	if len(p) == 0:
+		return np.nan
 	p = normalize(p)
 	try :
 		return (Na(n, p) - 1) / (Na(m, p) - 1)
 	except ZeroDivisionError:
-		return 0
+		return np.nan
 	
 def E_heip(p):
+	if len(p) == 0:
+		return np.nan
 	p = normalize(p)
 	return F(1, 0, p)
 
 def E_1mD(p):
+	if len(p) == 0:
+		return np.nan
 	p = normalize(p)
 	try :
 		return (1 - (Na(2, p) ** -1)) / (1 - (Na(0, p) ** -1))
 	except ZeroDivisionError:
-		return 0
+		return np.nan
 	
 def E_1dD(p):
+	if len(p) == 0:
+		return np.nan
 	p = normalize(p)
 	return E(2, 0, p)
 
 def E_lnD(p):
+	if len(p) == 0:
+		return np.nan
 	p = normalize(p)
 	return (- (log(Na(2, p) ** -1, b))) / log(Na(0, p), b)
 
 def G_21(p):
+	if len(p) == 0:
+		return np.nan
 	p = normalize(p)
 	f = F(2, 1, p)
 	if f <= (0.5 ** 0.5):
@@ -78,22 +100,32 @@ def G_21(p):
 		return 0.636611 * f * np.arcsin(f)
 	
 def O(p):
+	if len(p) == 0:
+		return np.nan
 	p = normalize(p)
 	return sum(min(x, Na(0, p) ** -1) for x in p)
 
 def E_x(p):
+	if len(p) == 0:
+		return np.nan
 	p = normalize(p)
 	return (O(p) - (Na(0, p) ** -1)) / (1 - (Na(0, p) ** -1))
 
 def E_mcl(f):
+	if len(f) == 0:
+		return np.nan
 	N = sum(f)
 	return (N - ((sum(x ** 2 for x in f)) ** 0.5)) / (N - (N / (Na(0, f) ** 0.5)))
 
 def E_prime(p):
+	if len(p) == 0:
+		return np.nan
 	p = normalize(p)
 	return 1 - ((sum(sum(np.abs(s1 - s2) for s2 in p[x+1:]) for x, s1 in enumerate(p[:-1]))) / (Na(0, p)))
 
 def E_var(f):
+	if len(f) == 0:
+		return np.nan
 	return 1 - (2 / np.pi) * np.arctan((sum((log(s) - sum(log(t) for t in f) / Na(0, f)) ** 2 for s in f)) / (Na(0, f)))
 
 def zipf_s(p):
@@ -165,12 +197,13 @@ def true_pred_to_dist(true_pred) -> tuple[np.ndarray, int]:
 def diversity_eval(true_pred):
 	tp_grpby, n = true_pred_to_dist(true_pred)
 	
-	est_s = zipf_s(tp_grpby)
+	est_s = zipf_s(tp_grpby) if len(tp_grpby) > 1 else np.nan
+
 
 	return {
 		'richness': Na(0, tp_grpby),
 		'N1': Na(1, tp_grpby),
-		'normalize_r': Na(0, tp_grpby)/n,
+		'normalize_r': Na(0, tp_grpby)/n if n > 0 else np.nan,
 		'H': Ha(1, tp_grpby),
 		'J': J(tp_grpby),
 		'e10': E(1, 0, tp_grpby),
@@ -191,6 +224,6 @@ def diversity_eval(true_pred):
 		'E_var' : E_var(tp_grpby),
 		'1/S': 1/est_s,
 		'exp_minus_S': np.exp(-est_s),
-		's_p_val': zipf_p_value((tp_grpby * n).astype(int), est_s, len(tp_grpby)),
-		'zipf_s_n': zipf_s_n((tp_grpby * n).astype(int))
+		's_p_val': zipf_p_value((tp_grpby * n).astype(int), est_s, len(tp_grpby)) if len(tp_grpby) > 1 else np.nan,
+		# 'zipf_s_n': zipf_s_n((tp_grpby * n).astype(int)) if len(tp_grpby) > 1 else np.nan
 	}
