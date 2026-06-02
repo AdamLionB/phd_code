@@ -436,6 +436,65 @@ def inline_mwes(
 	).reset_index().drop_duplicates().set_index('sentence_id')
 
 
+def union_mwes(
+    df1: DataFrame[tuple[SENTENCE_ID, TOKEN_ID, MWE_ID], tuple],
+    df2: DataFrame[tuple[SENTENCE_ID, TOKEN_ID, MWE_ID], tuple],
+) -> DataFrame[tuple[SENTENCE_ID, TOKEN_ID, MWE_ID], tuple]:
+    """Union of two MWE DataFrames.
+    Two entries are equal iff they share the same sentence_id and the same set of token_ids.
+    """
+    if df1.empty:
+        return df2
+    if df2.empty:
+        return df1
+    # Build a signature set from df1: (sentence_id, frozenset of token_ids)
+    sigs1 = {
+        (sid, frozenset(g['id']))
+        for (sid, _), g in df1.groupby(level=[0, 2])
+    }
+    # Per-sentence counter starting just after df1's max mwe_id for that sentence
+    mwe_counters = {
+        sid: max(int(mid) for mid in group.index.get_level_values('mwe_id')) + 1
+        for sid, group in df1.groupby(level=0)
+    }
+    new_entries = []
+    for (sid, _), g in df2.groupby(level=[0, 2]):
+        if (sid, frozenset(g['id'])) not in sigs1:
+            counter = mwe_counters.get(sid, 1)
+            g = g.reset_index()
+            g['mwe_id'] = str(counter)
+            mwe_counters[sid] = counter + 1
+            new_entries.append(g.set_index(['sentence_id', 'token_id', 'mwe_id']))
+
+    if not new_entries:
+        return df1
+    return pd.concat([df1] + new_entries)
+
+
+def intersection_mwes(
+    df1: DataFrame[tuple[SENTENCE_ID, TOKEN_ID, MWE_ID], tuple],
+    df2: DataFrame[tuple[SENTENCE_ID, TOKEN_ID, MWE_ID], tuple],
+) -> DataFrame[tuple[SENTENCE_ID, TOKEN_ID, MWE_ID], tuple]:
+    """Intersection of two MWE DataFrames.
+    Two entries are equal iff they share the same sentence_id and the same set of token_ids.
+    Keeps entries from df1 that have a match in df2.
+    """
+    if df1.empty or df2.empty:
+        return pd.DataFrame()
+    sigs2 = {
+        (sid, frozenset(g['id']))
+        for (sid, _), g in df2.groupby(level=[0, 2])
+    }
+    kept = [
+        g for (sid, _), g in df1.groupby(level=[0, 2])
+        if (sid, frozenset(g['id'])) in sigs2
+    ]
+    if not kept:
+        return pd.DataFrame()
+    return pd.concat(kept)
+
+
+
 def write_matches_as_dcupt(
 	matches: DataFrame,
 	base_blind_path: str,
