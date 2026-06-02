@@ -212,7 +212,8 @@ class LambdaCSS(Generic[P]):
 				return False
 		return True
 	
-	def expr(self):
+	def expr(self) -> fmset[str]:
+		''' Returns the "mwe-type" (fmset of lemmas) of the lambda-CSS,'''
 		def intern(node):
 			return reduce(
 				lambda x, y: x + intern(y),
@@ -220,6 +221,10 @@ class LambdaCSS(Generic[P]):
 				[node.prop['lemma']]
 			)
 		return fmset([x for x in intern(self) if x != ''])
+	
+	def get_mwe_type(self) -> fmset[str]:
+		''' Returns the "mwe-type" (fmset of lemmas) of the lambda-CSS,'''
+		return self.expr()
 
 
 # Standard specs
