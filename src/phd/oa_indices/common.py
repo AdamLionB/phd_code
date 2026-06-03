@@ -3,12 +3,12 @@ from .performance_indices import P_R_F
 from ..cupt_parser import DataFrame, inline_mwes
 from ..utils import SENTENCE_ID, MWE_ID, TOKEN_ID, fmset
 import pandas as pd
-from typing import Iterable
+from typing import Iterable, Optional
 
 def full_eval(
 	truth: DataFrame[tuple[SENTENCE_ID, TOKEN_ID, MWE_ID], tuple],
 	pred: DataFrame[tuple[SENTENCE_ID, TOKEN_ID, MWE_ID], tuple],
-) -> dict[str, float | None]:
+) -> dict[str, Optional[float]]:
 	inline_truth, inline_pred, inline_true_pred = true_pred(truth, pred)
 	p, r, f = P_R_F(inline_truth, inline_pred, inline_true_pred)
 
@@ -36,7 +36,7 @@ def seen_unseen_full_eval(
 	truth: DataFrame[tuple[SENTENCE_ID, TOKEN_ID, MWE_ID], tuple],
 	pred: DataFrame[tuple[SENTENCE_ID, TOKEN_ID, MWE_ID], tuple],
 	seen_mwe_types: Iterable[fmset[str]],
-) -> tuple[dict[str, float | None], dict[str, float | None]]:
+) -> tuple[dict[str, Optional[float]], dict[str, Optional[float]]]:
 	
 	inline_truth_seen, inline_pred_seen,inline_true_pred_seen,\
 	inline_truth_unseen, inline_pred_unseen, inline_true_pred_unseen = seen_unseen_true_pred(truth, pred, seen_mwe_types)
