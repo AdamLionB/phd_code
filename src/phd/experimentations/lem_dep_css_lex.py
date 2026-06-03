@@ -6,6 +6,7 @@ import pandas as pd
 import os
 from time import perf_counter
 from collections import Counter
+from pathlib import Path
 
 def load_or_compute_and_save_prediction(target_path, base_path, predict_func):
 	if os.path.exists(target_path):
@@ -127,7 +128,16 @@ if METHOD == 'LIAI':
 	DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 	FROZEN = False
 	print('Loading LIAI model')
-	liai_model = liai.Merger_with_padding_mask(4, FROZEN, DEVICE).to(DEVICE)
+
+	# BERT_CUSTOM_CACHE = str(Path('~/.cache/huggingface/hub/models--bert-base-multilingual-cased/snapshots/fdfce55e83dbed325647a63e7e1f5de19f0382ba').expanduser().resolve())
+	BERT_CUSTOM_CACHE = None
+
+	liai_model = liai.Merger_with_padding_mask(
+		4,
+		FROZEN,
+		DEVICE,
+		BERT_CUSTOM_CACHE
+	).to(DEVICE)
 	state_dict = torch.load(
 		os.path.join(LIAI_MODEL_PATH, LIAI_MODEL_NAME),
 		map_location=torch.device('cpu') if DEVICE == 'cpu' else None
