@@ -7,15 +7,27 @@ import os
 from time import perf_counter
 from collections import Counter
 
+def load_or_compute_and_save_prediction(target_path, base_path, predict_func):
+	if os.path.exists(target_path):
+		df_pred = cupt_parser.setup_data_noTT(
+			target_path
+		)
+		return cupt_parser.get_mwes(df_pred)
+	else:
+		mwes_pred = predict_func()
+		cupt_parser.write_matches_as_dcupt(mwes_pred, base_path, target_path)
+		return mwes_pred
+
+
 # %%
 
 
 res = []
-PARSEME_PATH = '../data/parseme'
+PARSEME_PATH = os.path.join('..', 'data', 'parseme')
 PARSEME_VERSION = '1.2'
-LANG = 'FR'
+LANG = 'HE'
 TRAIN_CORPUS_NAME = 'traindev'
-TRAIN_CORPUS_PATH = f'{PARSEME_PATH}/{PARSEME_VERSION}/{LANG}/{TRAIN_CORPUS_NAME}.gold.dcupt'
+TRAIN_CORPUS_PATH = os.path.join(PARSEME_PATH, PARSEME_VERSION, LANG, f'{TRAIN_CORPUS_NAME}.gold.dcupt')
 
 lex_base = lambdacss.LambdaCSS_spec({'lemma' : True, 'deprel': False})
 
@@ -28,9 +40,9 @@ t_end = perf_counter()
 print(f'Corpus loaded in {(t_end - t_start):.2f}s: {len(TT_train_lex)} sentences, {len(df_train_lex)} tokens')
 
 
-LEX_PATH = f'../data/lexicons'
+LEX_PATH = os.path.join('..', 'data', 'lexicons')
 LEX_JSON_NAME = f'tmp_{LANG}_{"".join(PARSEME_VERSION.split("."))}_{TRAIN_CORPUS_NAME}.json'
-LEX_JSON_PATH = f'{LEX_PATH}/{LEX_JSON_NAME}'
+LEX_JSON_PATH = os.path.join(LEX_PATH, LEX_JSON_NAME)
 
 print('Generating or loading lexicon from "train" corpus...')
 lex_train = scripts.extract_lem_dep_css_lex.generate_or_load_lexicon_from_corpus_TT(TT_train_lex, LEX_JSON_PATH)
@@ -40,8 +52,8 @@ print(f'Lexicon generated or loaded: {mwe_type_dist_train.total()} entries, {len
 
 # %% -----------------------------------------------------------------------------------------------
 TEST_CORPUS_NAME = 'test'
-TEST_CORPUS_GOLD_PATH = f'{PARSEME_PATH}/{PARSEME_VERSION}/{LANG}/{TEST_CORPUS_NAME}.gold.dcupt'
-TEST_CORPUS_BLIND_PATH = f'{PARSEME_PATH}/{PARSEME_VERSION}/{LANG}/{TEST_CORPUS_NAME}.blind.cupt'
+TEST_CORPUS_GOLD_PATH = os.path.join(PARSEME_PATH, PARSEME_VERSION, LANG, f'{TEST_CORPUS_NAME}.gold.dcupt')
+TEST_CORPUS_BLIND_PATH = os.path.join(PARSEME_PATH, PARSEME_VERSION, LANG, f'{TEST_CORPUS_NAME}.blind.cupt')
 
 
 print(f'Loading "test" corpus from {TEST_CORPUS_GOLD_PATH}')
@@ -61,14 +73,15 @@ print(f'MWEs extracted in {(t_end - t_start):.2f}s: {len(test_inline_mwes)} MWEs
 
 
 # %% -----------------------------------------------------------------------------------------------
-PRED_PATH = '../data/lex_pred'
-PRED_FILE_PATH = f'{PARSEME_VERSION}/{LANG}/{TEST_CORPUS_NAME}.lex_lem_dep_css_trained_on_{TRAIN_CORPUS_NAME}.dcupt'
+PRED_PATH = os.path.join('..', 'data', 'lex_pred')
+LEX_PRED_NAME = f'{TEST_CORPUS_NAME}.lex_lem_dep_css_trained_on_{TRAIN_CORPUS_NAME}.dcupt'
+PRED_FILE_PATH = os.path.join(PRED_PATH, PARSEME_VERSION, LANG, LEX_PRED_NAME)
 
-if os.path.exists(f'{PRED_PATH}/{PRED_FILE_PATH}'):
-	print(f'Matching prediction from lexicon from file {PRED_PATH}/{PRED_FILE_PATH}')
+if os.path.exists(PRED_FILE_PATH):
+	print(f'Matching prediction from lexicon from file PRED_FILE_PATH')
 	t_start = perf_counter()
-	_, df_lex_pred = cupt_parser.setup_data(
-		f'{PRED_PATH}/{PRED_FILE_PATH}'
+	df_lex_pred = cupt_parser.setup_data_noTT(
+		PRED_FILE_PATH
 	)
 	lex_pred_mwes = cupt_parser.get_mwes(df_lex_pred)
 	lex_pred_inline_mwes = cupt_parser.inline_mwes(lex_pred_mwes)
@@ -80,12 +93,15 @@ else:
 	t_start = perf_counter()
 	lex_pred_mwes = lex_train.match(df_test)
 	lex_pred_inline_mwes = cupt_parser.inline_mwes(lex_pred_mwes)
-	cupt_parser.write_matches_as_dcupt(lex_pred_mwes, TEST_CORPUS_BLIND_PATH, f'{PRED_PATH}/{PRED_FILE_PATH}')
+	cupt_parser.write_matches_as_dcupt(lex_pred_mwes, TEST_CORPUS_BLIND_PATH, PRED_FILE_PATH)
+	df_lex_pred = cupt_parser.setup_data_noTT(
+		PRED_FILE_PATH
+	)
 	t_end = perf_counter()
 	print(f'Lexicon matched against test corpus in {(t_end - t_start):.2f}s: {len(lex_pred_inline_mwes)} predicted MWEs')
 
 #%%
-SYSTEM_PATH = f'{PARSEME_PATH}/{PARSEME_VERSION}/system-results/MTLB-STRUCT.open/{LANG}/{TEST_CORPUS_NAME}.system.cupt'
+SYSTEM_PATH = os.path.join(PARSEME_PATH, PARSEME_VERSION, 'system-results', 'MTLB-STRUCT.open', LANG, f'{TEST_CORPUS_NAME}.system.cupt')
 print(f'Loading system predictions from {SYSTEM_PATH}')
 t_start = perf_counter()
 _, df_system_pred = cupt_parser.setup_data(
@@ -106,13 +122,14 @@ if METHOD == 'union':
 if METHOD == 'intersection':
 	merged_pred_mwes = cupt_parser.intersection_mwes(lex_pred_mwes, system_pred_mwes)
 if METHOD == 'LIAI':
-	LIAI_PATH = '../data/liai'
+	LIAI_MODEL_PATH = os.path.join('..', 'data', 'liai')
+	LIAI_MODEL_NAME = '45_merger_masked.model'
 	DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 	FROZEN = False
 	print('Loading LIAI model')
 	liai_model = liai.Merger_with_padding_mask(4, FROZEN, DEVICE).to(DEVICE)
 	state_dict = torch.load(
-		f'{LIAI_PATH}/45_merger_masked.model',
+		os.path.join(LIAI_MODEL_PATH, LIAI_MODEL_NAME),
 		map_location=torch.device('cpu') if DEVICE == 'cpu' else None
 	)
 	state_dict.pop('bert.embedding.embeddings.position_ids', None)
@@ -131,31 +148,50 @@ if METHOD == 'LIAI':
 
 #%%
 if METHOD == 'LIAI':
-	print('Predicting with LIAI')
-	liai_res = liai.predict(liai_model, test_sentences, Y_system_test, Y_lex_test, device=DEVICE, batch_size=1)
-
-
-	# df2ts remaps sentence_ids; reconstruct the reverse map (same Python session => same set() ordering)
-	_liai_rev_map = dict(enumerate(list(set(df_system_pred.reset_index()['sentence_id']))))
-
-	# Build (original_sentence_id, frozenset_of_1indexed_token_ids) for every MWE in liai_res
-	_liai_mwe_sigs = set()
-	for _, row in liai_res.iterrows():
-		orig_sid = _liai_rev_map[row['sentence_id']]
-		tokens_0 = frozenset(i + 1 for i, v in enumerate(row[0]) if v == 1)
-		tokens_m = frozenset(i + 1 for i, v in enumerate(row['_merge']) if v == 1)
-		if tokens_0:
-			_liai_mwe_sigs.add((orig_sid, tokens_0))
-		if tokens_m:
-			_liai_mwe_sigs.add((orig_sid, tokens_m))
+	LIAI_PRED_PATH = os.path.join('..', 'data', 'liai_pred')
+	LIAI_PRED_FILE_PATH = os.path.join(LIAI_PRED_PATH, PARSEME_VERSION, LANG, f'{TEST_CORPUS_NAME}.{LIAI_MODEL_NAME.removesuffix(".model")}_{LEX_PRED_NAME}')
 	
-	# Filter union: keep only MWEs whose (sentence_id, token set) appears in liai_res
-	merged_pred_mwes = cupt_parser.union_mwes(lex_pred_mwes, system_pred_mwes).groupby(level=[0, 2]).filter(
-		lambda g: (
-			g.index.get_level_values('sentence_id')[0],
-			frozenset(g['id'])
-		) in _liai_mwe_sigs
+	def predict_func():
+		ts_pred = liai.predict(liai_model, test_sentences, Y_system_test, Y_lex_test, device=DEVICE, batch_size=30)
+		return liai.prep.ts2df(
+			df_test,
+			cupt_parser.union_mwes(lex_pred_mwes, system_pred_mwes),
+			ts_pred
+			)
+	print('Predicting with LIAI or loading predictions')
+	merged_pred_mwes = load_or_compute_and_save_prediction(
+		LIAI_PRED_FILE_PATH,
+		TEST_CORPUS_BLIND_PATH,
+		predict_func
 	)
+	
+
+	# merged_pred_mwes = liai.prep.ts2df(
+	# 	df_test,
+	# 	cupt_parser.union_mwes(lex_pred_mwes, system_pred_mwes),
+	# 	liai_res
+	# 	)
+	# # df2ts remaps sentence_ids; reconstruct the reverse map 
+	# _liai_rev_map = dict(enumerate(list(set(df_system_pred.reset_index()['sentence_id']))))
+
+	# # Build (original_sentence_id, frozenset_of_1indexed_token_ids) for every MWE in liai_res
+	# _liai_mwe_sigs = set()
+	# for _, row in liai_res.iterrows():
+	# 	orig_sid = _liai_rev_map[row['sentence_id']]
+	# 	tokens_0 = frozenset(i + 1 for i, v in enumerate(row[0]) if v == 1)
+	# 	tokens_m = frozenset(i + 1 for i, v in enumerate(row['_merge']) if v == 1)
+	# 	if tokens_0:
+	# 		_liai_mwe_sigs.add((orig_sid, tokens_0))
+	# 	if tokens_m:
+	# 		_liai_mwe_sigs.add((orig_sid, tokens_m))
+	
+	# # Filter union: keep only MWEs whose (sentence_id, token set) appears in liai_res
+	# merged_pred_mwes = cupt_parser.union_mwes(lex_pred_mwes, system_pred_mwes).groupby(level=[0, 2]).filter(
+	# 	lambda g: (
+	# 		g.index.get_level_values('sentence_id')[0],
+	# 		frozenset(g['id'])
+	# 	) in _liai_mwe_sigs
+	# )
 
 #%%
 merged_pred_inline_mwes = cupt_parser.inline_mwes(merged_pred_mwes)

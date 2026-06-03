@@ -89,8 +89,7 @@ def df2ts(
 	)
 	# print(f"Mask created in {time.perf_counter() - t} seconds")
 
-	indices = list(set(DATA.reset_index()['sentence_id']))
-	indices_map = {x : n for n, x in enumerate(indices)}
+	indices_map = {x : n for n, x in enumerate(list(set(DATA.reset_index()['sentence_id'])))}
 
 	# with mo.status.spinner('Creating labels'):
 	# t = time.perf_counter()
@@ -158,6 +157,32 @@ def df2ts(
 	# b = pd.DataFrame([(y.int(),) for y in x])
 	# labels = pd.concat([a, b])
 
+def ts2df(
+	DATA: utils.DataFrame[tuple[utils.SENTENCE_ID, utils.TOKEN_ID], tuple],
+	union_pred_mwes: utils.DataFrame[tuple[utils.SENTENCE_ID, utils.TOKEN_ID, utils.MWE_ID], tuple],
+	liai_res: pd.DataFrame
+	):
+	'''Reconstruct the df of LIAI predictions'''
+	# df2ts remaps sentence_ids; reconstruct the reverse map (same Python session => same set() ordering)
+	_liai_rev_map = dict(enumerate(list(set(DATA.reset_index()['sentence_id']))))
 
+	# Build (original_sentence_id, frozenset_of_1indexed_token_ids) for every MWE in liai_res
+	_liai_mwe_sigs = set()
+	for _, row in liai_res.iterrows():
+		orig_sid = _liai_rev_map[row['sentence_id']]
+		tokens_0 = frozenset(i + 1 for i, v in enumerate(row[0]) if v == 1)
+		tokens_m = frozenset(i + 1 for i, v in enumerate(row['_merge']) if v == 1)
+		if tokens_0:
+			_liai_mwe_sigs.add((orig_sid, tokens_0))
+		if tokens_m:
+			_liai_mwe_sigs.add((orig_sid, tokens_m))
+	
+	# Filter union: keep only MWEs whose (sentence_id, token set) appears in liai_res
+	return union_pred_mwes.groupby(level=[0, 2]).filter(
+		lambda g: (
+			g.index.get_level_values('sentence_id')[0],
+			frozenset(g['id'])
+		) in _liai_mwe_sigs
+	)
 
 # %%

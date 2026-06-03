@@ -8,24 +8,72 @@ authors = [
 ]
 requires-python = ">=3.9"
 dependencies = [
-    "conllu>=6.0.0",
-    "ipykernel",
-    "ipywidgets>=8.1.8",
-    "jinja2>=3.1.6",
+    "conllu",
+    "huggingface-hub==0.11.1 ; python_version < '3.11'",
+    "huggingface-hub          ; python_version >= '3.11'",
+    "ipykernel>=6.0",
+    "ipywidgets",
+    "jinja2",
     "marimo",
     "matplotlib",
-    "pandas",
-    "rich>=14.3.3",
+    "numpy==1.26 ; python_version < '3.11'",
+    "numpy>=2.0  ; python_version >= '3.11'",
+    "pandas==1.5.2 ; python_version < '3.11'",
+    "pandas>=2.0   ; python_version >= '3.11'",
+    "pytz",
+    "requests",
+    "rich",
     "scikit-learn",
     "scipy",
-    "torch",
-    "tqdm>=4.67.3",
-    "transformers",
-    "wandb>=0.25.1",
+    "tqdm",
+    "transformers==4.24.0 ; python_version < '3.11'",
+    "transformers          ; python_version >= '3.11'",
+    "urllib3",
+    "wandb",
+]
+
+# torch is NOT in main dependencies because the wheel URL differs for cpu vs gpu
+# and between Python versions (1.13 for py3.9, 2.6+ for py3.13).
+# Install with:  uv sync --extra gpu   OR   uv sync --extra cpu
+[project.optional-dependencies]
+gpu = [
+    "torch==1.13.0+cu117 ; python_version < '3.11'",
+    "torch>=2.6.0        ; python_version >= '3.11'",
+]
+cpu = [
+    "torch==1.13.0+cpu ; python_version < '3.11'",
+    "torch>=2.6.0      ; python_version >= '3.11'",
 ]
 
 [tool.uv]
 link-mode = "hardlink"
+conflicts = [
+    [{ extra = "gpu" }, { extra = "cpu" }],
+]
+
+
+# torch wheels are only on the PyTorch index, never on PyPI.
+[[tool.uv.index]]
+name = "pytorch-cu117"
+url = "https://download.pytorch.org/whl/cu117"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cu117", extra = "gpu", marker = "python_version < '3.11'" },
+    { index = "pytorch-cu124", extra = "gpu", marker = "python_version >= '3.11'" },
+    { index = "pytorch-cpu",   extra = "cpu" },
+]
 
 [project.scripts]
 phd = "phd:main"

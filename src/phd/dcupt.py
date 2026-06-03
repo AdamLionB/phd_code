@@ -161,7 +161,7 @@ def _validate_and_resolve_bases(header: dict[str, str | list[str]], filepath: st
     dcupt_dir = Path(filepath).resolve().parent
     base_paths: list[Path] = []
     for ref in base_refs:
-        base_path = (dcupt_dir / ref).resolve()
+        base_path = (dcupt_dir / ref.replace('\\', '/')).resolve()
         if not base_path.exists():
             raise FileNotFoundError(
                 f"Base file not found: {base_path} "
@@ -345,6 +345,7 @@ def create(
             lines.extend(overrides[(b, s)])
             lines.append('')
 
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(lines))
 
