@@ -75,7 +75,7 @@ Notes:
 import io
 from pathlib import Path
 from conllu import parse_incr, TokenList
-from typing import Iterator, Optional
+from typing import Iterator, Optional, Union
 import re
 
 DCUPT_EXTENSION = '.dcupt'
@@ -94,7 +94,7 @@ def is_dcupt(path: str) -> bool:
     return path.endswith(DCUPT_EXTENSION)
 
 
-def _parse_file(filepath: str) -> tuple[dict[str, str | list[str]], dict[tuple[int, int], list[str]]]:
+def _parse_file(filepath: str) -> tuple[dict[str, Union[str, list[str]]], dict[tuple[int, int], list[str]]]:
     """Parse a .dcupt file into header and per-sentence overrides.
 
     Returns
@@ -107,7 +107,7 @@ def _parse_file(filepath: str) -> tuple[dict[str, str | list[str]], dict[tuple[i
         ``# sentence = S`` is read as ``(0, S)`` for backward compatibility.
         Each value is a list of strings, one per token line.
     """
-    header: dict[str, str | list[str]] = {}
+    header: dict[str, Union[str, list[str]]] = {}
     overrides: dict[tuple[int, int], list[str]] = {}
     current_sentence: Optional[tuple[int, int]] = None
 
@@ -146,7 +146,7 @@ def _parse_file(filepath: str) -> tuple[dict[str, str | list[str]], dict[tuple[i
     return header, overrides
 
 
-def _validate_and_resolve_bases(header: dict[str, str | list[str]], filepath: str) -> list[Path]:
+def _validate_and_resolve_bases(header: dict[str, Union[str, list[str]]], filepath: str) -> list[Path]:
     """Validate dcupt header and return list of resolved base file paths."""
     version = header.get('dcupt-version', '1.1')
     if version not in ('1', '1.1'):
@@ -292,7 +292,7 @@ def resolve(filepath: str) -> Iterator[TokenList]:
 
 def create(
     output_path: str,
-    base_ref: str | list[str],
+    base_ref: Union[str, list[str]],
     columns: Optional[list[str]] = None,
     default_value: Optional[str] = None,
     overrides: Optional[dict[tuple[int, int], list[str]]] = None,

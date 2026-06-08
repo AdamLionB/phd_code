@@ -6,6 +6,7 @@ import pandas as pd
 import os
 from time import perf_counter
 from collections import Counter
+from pathlib import Path
 
 def load_or_compute_and_save_prediction(target_path, base_path, predict_func):
 	if os.path.exists(target_path):
@@ -47,7 +48,7 @@ LEX_JSON_PATH = os.path.join(LEX_PATH, LEX_JSON_NAME)
 print('Generating or loading lexicon from "train" corpus...')
 lex_train = scripts.extract_lem_dep_css_lex.generate_or_load_lexicon_from_corpus_TT(TT_train_lex, LEX_JSON_PATH)
 mwe_type_dist_train = Counter(lcss.get_mwe_type() for lcss in lex_train)
-print(f'Lexicon generated or loaded: {mwe_type_dist_train.total()} entries, {len(mwe_type_dist_train)} unique MWE types, most common MWE type appears {mwe_type_dist_train.most_common(1)[0][1]} times')
+print(f'Lexicon generated or loaded: {sum(mwe_type_dist_train.values())} entries, {len(mwe_type_dist_train)} unique MWE types, most common MWE type appears {mwe_type_dist_train.most_common(1)[0][1]} times')
 
 
 # %% -----------------------------------------------------------------------------------------------
@@ -127,13 +128,28 @@ if METHOD == 'LIAI':
 	DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 	FROZEN = False
 	print('Loading LIAI model')
-	liai_model = liai.Merger_with_padding_mask(4, FROZEN, DEVICE).to(DEVICE)
+
+	# BERT_CUSTOM_CACHE = str(Path('~/.cache/huggingface/hub/models--bert-base-multilingual-cased/snapshots/fdfce55e83dbed325647a63e7e1f5de19f0382ba').expanduser().resolve())
+	BERT_CUSTOM_CACHE = None
+
+	liai_model = liai.Merger_with_padding_mask(
+		4,
+		FROZEN,
+		DEVICE,
+		BERT_CUSTOM_CACHE
+	).to(DEVICE)
 	state_dict = torch.load(
 		os.path.join(LIAI_MODEL_PATH, LIAI_MODEL_NAME),
 		map_location=torch.device('cpu') if DEVICE == 'cpu' else None
 	)
-	state_dict.pop('bert.embedding.embeddings.position_ids', None)
-	liai_model.load_state_dict(state_dict)
+
+	try:
+		# older versions
+		liai_model.load_state_dict(state_dict)
+	except:
+		# newer versions
+		state_dict.pop('bert.embedding.embeddings.position_ids', None)
+		liai_model.load_state_dict(state_dict)
 
 	voc = liai.prep.Voc()
 
@@ -149,7 +165,7 @@ if METHOD == 'LIAI':
 #%%
 if METHOD == 'LIAI':
 	LIAI_PRED_PATH = os.path.join('..', 'data', 'liai_pred')
-	LIAI_PRED_FILE_PATH = os.path.join(LIAI_PRED_PATH, PARSEME_VERSION, LANG, f'{TEST_CORPUS_NAME}.{LIAI_MODEL_NAME.removesuffix(".model")}_{LEX_PRED_NAME}')
+	LIAI_PRED_FILE_PATH = os.path.join(LIAI_PRED_PATH, PARSEME_VERSION, LANG, f'{TEST_CORPUS_NAME}.{LIAI_MODEL_NAME.removesuffix(".model")}39_{LEX_PRED_NAME}')
 	
 	def predict_func():
 		ts_pred = liai.predict(liai_model, test_sentences, Y_system_test, Y_lex_test, device=DEVICE, batch_size=30)
@@ -220,4 +236,17 @@ for metric in scores_merged_all.keys():
 	print(f'{metric}: merged seen {fmt(scores_merged_seen[metric])}, merged unseen {fmt(scores_merged_unseen[metric])}, merged all {fmt(scores_merged_all[metric])} | system seen {fmt(scores_system_seen[metric])}, system unseen {fmt(scores_system_unseen[metric])}, system all {fmt(scores_system_all[metric])}')
 
 
+# %% OLD EVAL FOR COMPARISON
+
+_,_,_,_,_,Y_truth_test,_,_,_,_,_ = liai.prep.df2ts(df_test, voc, 0, 1)
+truth_test, data_test = liai.build_candidate_table_and_labels(Y_system_test, Y_lex_test, Y_truth_test)
+liai.eval_model(
+	liai_model,
+	test_sentences,
+	Y_truth_test,
+	data_test,
+	truth_test,
+	df_test,
+	device=DEVICE,
+)
 # %%
