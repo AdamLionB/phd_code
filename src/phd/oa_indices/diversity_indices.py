@@ -51,7 +51,10 @@ def J(p):
 	if len(p) == 0:
 		return np.nan
 	p = normalize(p)
-	return H(p) / log(Na(0, p), b)
+	try:
+		return H(p) / log(Na(0, p), b)
+	except ZeroDivisionError:
+		return np.nan
 
 def F(n, m, p):
 	if len(p) == 0:
@@ -87,7 +90,10 @@ def E_lnD(p):
 	if len(p) == 0:
 		return np.nan
 	p = normalize(p)
-	return (- (log(Na(2, p) ** -1, b))) / log(Na(0, p), b)
+	try:
+		return (- (log(Na(2, p) ** -1, b))) / log(Na(0, p), b)
+	except ZeroDivisionError:
+		return np.nan
 
 def G_21(p):
 	if len(p) == 0:
@@ -109,24 +115,36 @@ def E_x(p):
 	if len(p) == 0:
 		return np.nan
 	p = normalize(p)
-	return (O(p) - (Na(0, p) ** -1)) / (1 - (Na(0, p) ** -1))
+	try:
+		return (O(p) - (Na(0, p) ** -1)) / (1 - (Na(0, p) ** -1))
+	except ZeroDivisionError:
+		return np.nan
 
 def E_mcl(f):
 	if len(f) == 0:
 		return np.nan
 	N = sum(f)
-	return (N - ((sum(x ** 2 for x in f)) ** 0.5)) / (N - (N / (Na(0, f) ** 0.5)))
+	try:
+		return (N - ((sum(x ** 2 for x in f)) ** 0.5)) / (N - (N / (Na(0, f) ** 0.5)))
+	except ZeroDivisionError:
+		return np.nan
 
 def E_prime(p):
 	if len(p) == 0:
 		return np.nan
 	p = normalize(p)
-	return 1 - ((sum(sum(np.abs(s1 - s2) for s2 in p[x+1:]) for x, s1 in enumerate(p[:-1]))) / (Na(0, p)))
+	try:
+		return 1 - ((sum(sum(np.abs(s1 - s2) for s2 in p[x+1:]) for x, s1 in enumerate(p[:-1]))) / (Na(0, p)))
+	except ZeroDivisionError:
+		return np.nan
 
 def E_var(f):
 	if len(f) == 0:
 		return np.nan
-	return 1 - (2 / np.pi) * np.arctan((sum((log(s) - sum(log(t) for t in f) / Na(0, f)) ** 2 for s in f)) / (Na(0, f)))
+	try:
+		return 1 - (2 / np.pi) * np.arctan((sum((log(s) - sum(log(t) for t in f) / Na(0, f)) ** 2 for s in f)) / (Na(0, f)))
+	except ZeroDivisionError:
+		return np.nan
 
 def zipf_s(p):
 	return curve_fit(

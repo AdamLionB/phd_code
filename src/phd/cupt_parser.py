@@ -422,6 +422,8 @@ def get_mwes(df : DataFrame) -> DataFrame[tuple[SENTENCE_ID, TOKEN_ID, MWE_ID], 
 def inline_mwes(
 	mwes : DataFrame[tuple[SENTENCE_ID, TOKEN_ID, MWE_ID], tuple]
 ) -> DataFrame[tuple[SENTENCE_ID], tuple[utils.fmset, tuple]]:
+	if len(mwes) == 0:
+		return pd.DataFrame(columns=['sentence_id', 0, 1]).set_index('sentence_id')
 	grouped = mwes.groupby(level=[0, 2]).apply(
 		lambda x : (utils.fmset(list(x['lemma'])), tuple(x['id']))
 	)
